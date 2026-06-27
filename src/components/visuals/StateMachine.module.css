@@ -1,0 +1,69 @@
+.root {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  background: var(--ifm-background-surface-color);
+}
+.legend {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
+  margin-bottom: 0.8rem;
+  text-align: center;
+}
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+}
+.node {
+  border: 2px solid var(--k, var(--ifm-color-emphasis-400));
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  transition: transform 0.08s ease;
+}
+.node:hover { transform: translateY(-1px); }
+.sel { background: var(--k); color: #1c1e21; }
+
+.detail {
+  margin-top: 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+  padding-top: 0.8rem;
+}
+.detail h4 { margin: 0 0 0.4rem 0; display: flex; align-items: center; gap: 0.5rem; }
+.dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+.code { font-size: 0.78rem; }
+.blurb { margin: 0 0 0.6rem 0; }
+.row { display: flex; gap: 0.6rem; padding: 0.2rem 0; font-size: 0.9rem; }
+.k {
+  font-weight: 700;
+  color: var(--ifm-color-emphasis-700);
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.transWrap { display: flex; gap: 1rem; margin: 0.7rem 0; }
+.transCol { flex: 1; }
+.transHead { font-size: 0.78rem; font-weight: 700; color: var(--ifm-color-emphasis-600); margin-bottom: 0.3rem; }
+.trans {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-font-color-base);
+}
+.trans:hover { border-color: var(--ifm-color-primary); }
+.trans em { color: var(--ifm-color-emphasis-600); font-style: italic; }
+.none { font-size: 0.82rem; color: var(--ifm-color-emphasis-500); font-style: italic; }

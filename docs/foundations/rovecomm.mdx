@@ -1,0 +1,88 @@
+---
+title: RoveComm
+description: Our custom application-layer protocol, packet format, ports, and the manifest.
+---
+
+# RoveComm, our custom protocol
+
+RoveComm is the language every part of the rover speaks. It's a small fixed-header binary protocol that runs over UDP, and over TCP when we need delivery to be guaranteed, and we kept it dead simple on purpose so that an STM32 microcontroller can speak it just as easily as the Jetson can.
+
+## Transport & ports
+
+| | UDP | TCP |
+|---|---|---|
+| Production | `11000` | `12000` |
+| Simulation | `11001` | `12001` |
+
+We use UDP for the high-rate stuff like telemetry and drive commands, where low latency matters a lot more than guaranteed delivery, and we use TCP for the things that have to arrive like config and waypoint lists. A node subscribes to another node's IP to start receiving its telemetry, and you get up to 10 UDP subscribers per node while the server thread tracks up to 120 IPs.
+
+## The packet: a 6-byte header + payload
+
+```mermaid
+packet-beta
+0-7: "Version (=3)"
+8-23: "Data ID (16-bit, big-endian)"
+24-39: "Data Count (16-bit, big-endian)"
+40-47: "Data Type (enum)"
+48-95: "Payload, Count × sizeof(type), network byte order"
+```
+
+Every packet starts with the same 6 bytes. The version is currently `3`, and if it doesn't match you get an `INVALID_VERSION` reply back. The data ID is what the packet actually is, like `11000` for StartAutonomy, and the IDs are namespaced per board by range. The data count is the number of elements, not the number of bytes, and the data type is one of the values in the table below. Every element gets converted to network byte order with `htons`/`htonl`/`htonll` before it goes out.
+
+| Type | Value | Bytes | | Type | Value | Bytes |
+|---|---|---|---|---|---|---|
+| INT8_T | 0 | 1 | | UINT32_T | 5 | 4 |
+| UINT8_T | 1 | 1 | | FLOAT_T | 6 | 4 |
+| INT16_T | 2 | 2 | | DOUBLE_T | 7 | 8 |
+| UINT16_T | 3 | 2 | | CHAR | 8 | 1 |
+| INT32_T | 4 | 4 | | | | |
+
+There are a handful of reserved system packet IDs: `PING=1`, `PING_REPLY=2`, `SUBSCRIBE=3`, `UNSUBSCRIBE=4`, `INVALID_VERSION=5`, and `NO_DATA=6`. A few other globals worth knowing are the target `updateRate` of 100 Hz, the `headerLength` of 6, and the `DE:AD` MAC prefix that all of our boards' MACs start with. The MAC prefix is just an arbitrary value and nothing actually filters on it.
+
+## A real command, end to end
+
+```mermaid
+sequenceDiagram
+  participant Op as Operator (Basestation)
+  participant Au as Autonomy (192.168.3.100)
+  participant Co as Core board (192.168.2.110)
+  Op->>Au: AddPositionLeg (11002) [lat, lon, type]  via TCP
+  Op->>Au: StartAutonomy (11000) [1]  via UDP
+  Au-->>Op: CurrentState (11100) = Navigating
+  loop driving
+    Au->>Co: DriveLeftRight (3000) [L, R]
+    Au-->>Op: ThreadFPS / CurrentLog telemetry
+  end
+  Au-->>Op: CurrentState (11100) = ReachedGoal
+```
+
+## The Manifest, the single source of truth
+
+`RoveComm_CPP/data/RoveComm/manifest.json` defines every board, its IP, and every command, telemetry, and error packet, including the `dataId`, `dataType`, `dataCount`, and a human comment. CI code-generates it into headers for every language (`RoveCommManifest.h`, `.cs`, and the Python `manifest.json`), and the `sync-rovecomm` workflow keeps all of those copies consistent with each other.
+
+:::danger[The #1 RoveComm rule]
+Always edit the manifest at the source repo and let CI sync it out. If you hand-edit a manifest copy inside a downstream repo, the copies silently drift apart, and you will end up spending a competition afternoon trying to figure out why Autonomy and Basestation disagree on a packet.
+:::
+
+The full board and IP table lives in the [Reference Board Table](../reference/board-table), and it's also clickable on the [Network](./network) page.
+
+## Library variants
+
+| Library | Used by | Notes |
+|---|---|---|
+| `RoveComm_CPP` | Autonomy (Jetson) and other larger computers | not for microcontrollers, the embedded team has lightweight C variants |
+| `RoveComm_CSharp` | Basestation | submodule |
+| `RoveComm_Python` | GPS / Nav board | submodule in `Differential_GPS` |
+| `RoveComm_Base` | shared assets / manifest source | |
+
+In Autonomy the global instances live in `AutonomyNetworking.h` as `network::g_pRoveCommUDPNode` and `network::g_pRoveCommTCPNode`, each with its own atomic status flag.
+
+## Why RoveComm exists
+
+RoveComm was written to bridge the gap and fix the problem of communicating between all of our different software stacks. The simulator, Autonomy, Basestation, and the embedded controllers all need to talk to each other, and they're all written in different languages, so we build a RoveComm implementation once in each language as a thin wrapper around the OS sockets library. After that, everything is updated through the [manifest](#the-manifest-the-single-source-of-truth), which is pulled in as a submodule, so when a packet changes every stack picks it up automatically.
+
+The obvious question is why we don't just use something like ROS, or MQTT, or DDS. If we used ROS we would be locked into its ecosystem, and it would actually become more difficult to communicate between our custom simulator, autonomy, basestation, and embedded controllers, whereas RoveComm stays lightweight and completely in our control. Plus, rolling our own protocol instead of using something off the shelf is one of the best ways we have to build good engineers. It gives students a real place to use the knowledge they already have and to learn new things about network algorithms, multithreading, and the like. We build engineers. If we just imported plug-and-play ROS modules like a lot of other teams do, we would be like all the other teams, and that's a big part of why we're world class and why we won competition twice in a row.
+
+### A little history
+
+RoveComm has been through three wire versions so far. V1 was written by an early rover member named Eli Vogel, and not much about it is documented anymore. We know almost nothing about V2. The current V3 was written by Donovan Bale, Brady Tappel, and Clayton Cowen, and it's the version that every current stack speaks.

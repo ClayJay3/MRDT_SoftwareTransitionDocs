@@ -1,0 +1,32 @@
+---
+title: Glossary
+description: The acronyms and jargon decoded.
+---
+
+# Glossary
+
+| Term | Meaning |
+|---|---|
+| **URC** | University Rover Challenge, the competition we build for. |
+| **RoveComm** | Our custom UDP/TCP application-layer protocol. |
+| **Manifest** | `manifest.json`, the authoritative list of boards/IPs/packets. |
+| **Board** | An embedded device on the rover (Core, PMS, Nav, Arm, Auger, cameras…), each with a RoveComm IP. |
+| **Rocket** | A Ubiquiti Rocket wireless radio, and we run 3 frequency pairs. |
+| **EIGRP** | Cisco's routing protocol, and our current production rover-to-base routing (AS 90). |
+| **Babel** | RFC 8966 ETX-based routing protocol, and our proposed replacement. |
+| **VLAN** | Virtual LAN, which we segment by device type (2=control, 3=compute, 4=cameras, 100=base, 99=Babel transit). |
+| **ETX** | Expected Transmission Count, Babel's loss-aware link metric. |
+| **PIM** | Protocol Independent Multicast, carries camera multicast across the gap. |
+| **RP** | PIM Rendezvous Point, the rover switch loopback `192.168.254.1`. |
+| **QoS / `tc`** | Linux Traffic Control, used to prioritize joystick and telemetry over video. |
+| **BFD** | Bidirectional Forwarding Detection, millisecond link-failure detection. |
+| **GeoPlanner** | The global Weighted-A\* terrain planner over USGS LiDAR. |
+| **Traversability score** | Per-cell drivability from slope/roughness/curvature. |
+| **ZED** | Stereolabs stereo depth camera. |
+| **YOLO / TorchScript** | Object/tag detection models (`best.torchscript`). |
+| **EKF** | Extended Kalman Filter (fuses GPS + compass on the ArduPilot FC). |
+| **RTK** | Real-Time Kinematic GPS, cm-level precision. |
+| **GHCR** | GitHub Container Registry (where dev-container images live). |
+| **SDELC / CCF** | Lab spaces housing the AutoPC and the simulator/GitLab PC. |
+| **VaultWarden** | Our self-hosted Bitwarden credential vault. |
+| **SVI** | Switched Virtual Interface, a VLAN's gateway IP on the switch. |

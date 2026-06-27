@@ -1,0 +1,38 @@
+---
+title: Roadmap
+description: The prioritized backlog. Re-read at the start of every competition cycle.
+---
+
+# What Still Needs To Be Done
+
+This is the backlog, roughly in priority order. Re-read it at the start of every cycle.
+
+## Autonomy (we scored 86/100 last year, here's the missing 14)
+
+1. Fast local obstacle avoidance. This is the highest priority. It's the capability that costs us the most points, and it has to be fast. We already have a global planner ([`GeoPlanner`](../subteams/autonomy#path-planning-global-vs-missing-local) over USGS LiDAR), but nothing reactive for rocks that aren't in the map, which is exactly what gets us stuck and beached. Build a local costmap off live ZED depth (and/or onboard LiDAR), feed it to the existing `AStar` (or add a DWA / elastic-band layer), and steer around rocks in real time at frame rate. While you're at it, wire `StuckState` to trigger a local replan instead of just reversing and retrying.
+2. Improve the YOLO object model (it missed the water bottle). Collect a lot more images of the URC objects in competition-like desert lighting, at the ranges and angles the rover actually sees. Lean on `YOLO/custom_augment.py`, which already does grayscale, HSV shift, and copy-paste, and add brightness/contrast/shadow/sun-glare augmentations, and per-class copy-paste can help boost the rare bottle class. Revisit the per-camera confidence and NMS thresholds in `AutonomyConstants`, consider a bigger backbone (we already have a `v8s`), and validate on real field footage, not just the Roboflow validation split.
+3. Smarter stuck handling. Tell high-centering apart from wheel slip, add back-out arcs, and slow down in rough terrain using the traversability score.
+4. Field-test the handoff between the global planner and live perception on real courses. We already have LiDAR databases for MDRS, Hanksville, and Tucumcari.
+
+## Networking
+
+1. Ship [Babel](../foundations/babel). It's about 90% done, and the one blocker is route flapping. Fix that and it's competition-ready, and we also get a live network dashboard that EIGRP can't give us. Then regenerate the configs for all three bands ([5.8 GHz is currently shut down](../foundations/network#the-wireless-gap-the-rockets)) and validate PIM multicast and QoS end to end.
+2. Fix the network diagram. The `192.168.256.x` loopback typo should be `.254`, and add the Pi routers if Babel ships.
+
+## Basestation
+
+1. Keep components laying out cleanly at the 4-monitor portrait 1080×1920 competition layout.
+2. Build the operator UI for local obstacle avoidance: show the live costmap and detected rocks next to the global path.
+3. Make GPS fix quality and heading accuracy obvious. The new Nav board exposes `fix_type`, `hdg_acc`, and sat count, and operators need to see RTK-vs-no-fix at a glance.
+
+## Simulator
+
+1. Get to one source of truth by reconciling the CCF-PC GitLab copy with the GitHub `RoveSoSimulator` repo, and document how to build and run it.
+
+## Cross-cutting
+
+- Protect the performance budget across all three stacks: profile, reject unoptimized or untested code, and throw away slow code. This is a standing part of the job ([here's why](../start/the-role)).
+- Keep the RoveComm manifest as the single source of truth.
+- Keep the AutoPC runner, the Jetson runner, and VaultWarden alive and backed up.
+- Re-run every ACTION item on this site at the start of your term.
+

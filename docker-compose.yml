@@ -1,0 +1,31 @@
+# MRDT Software Bible — one command to bring up the site.
+#
+#   docker compose up                 → live-editing dev server at http://localhost:3000
+#                                        (edit any docs/*.mdx and the browser hot-reloads)
+#
+#   docker compose --profile prod up   → production build via nginx at http://localhost:8080
+
+services:
+  # Default: hot-reload dev server. Source is bind-mounted so edits are live.
+  site:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app          # live source
+      - /app/node_modules  # keep the image's node_modules (don't shadow with host)
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+    stdin_open: true
+    tty: true
+
+  # Optional: production static build served by nginx.
+  site-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      target: prod
+    ports:
+      - "8080:80"

@@ -1,0 +1,10 @@
+node_modules
+build
+.docusaurus
+.git
+.gitignore
+npm-debug.log
+.DS_Store
+Dockerfile
+docker-compose.yml
+.dockerignore

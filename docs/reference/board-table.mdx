@@ -1,0 +1,74 @@
+---
+title: Board / IP Reference
+description: Every RoveComm board, its IP, VLAN, and packet counts.
+---
+
+import {BOARDS, VLANS, RADIO_LINKS, SWITCHES, MULTICAST_CAMERAS, ROVECOMM} from '@site/src/data/network';
+
+# Board / IP Reference
+
+All of this is generated from `src/data/network.js` (sourced from the RoveComm manifest + live switch configs), so it matches the clickable map on the [Network](../foundations/network) page exactly.
+
+**RoveComm:** UDP `{ROVECOMM.udpPort}` / TCP `{ROVECOMM.tcpPort}` (sim `{ROVECOMM.simUdpPort}`/`{ROVECOMM.simTcpPort}`) · version `{ROVECOMM.version}` · MAC prefix `{ROVECOMM.macPrefix}` · header `{ROVECOMM.headerBytes}` bytes.
+
+## Boards
+
+<table>
+  <thead>
+    <tr><th>Board</th><th>IP</th><th>VLAN</th><th>Role</th><th>Cmd / Tlm / Err</th></tr>
+  </thead>
+  <tbody>
+    {BOARDS.map((b) => (
+      <tr key={b.name}>
+        <td><strong>{b.name}</strong></td>
+        <td><code>{b.ip}</code></td>
+        <td>{b.vlan}, {VLANS[b.vlan].name}</td>
+        <td>{b.role}</td>
+        <td>{b.cmds} / {b.tlm} / {b.err}</td>
+      </tr>
+    ))}
+  </tbody>
+</table>
+
+## VLANs
+
+<table>
+  <thead><tr><th>VLAN</th><th>Name</th><th>Subnet</th><th>Gateway</th><th>Role</th></tr></thead>
+  <tbody>
+    {Object.entries(VLANS).map(([id, v]) => (
+      <tr key={id}><td>{id}</td><td>{v.name}</td><td><code>{v.subnet}</code></td><td><code>{v.gateway}</code></td><td>{v.role}</td></tr>
+    ))}
+  </tbody>
+</table>
+
+## Wireless links
+
+<table>
+  <thead><tr><th>Band</th><th>Subnet</th><th>Rover rocket</th><th>Base rocket</th><th>State</th></tr></thead>
+  <tbody>
+    {RADIO_LINKS.map((r) => (
+      <tr key={r.band}><td><strong>{r.band}</strong></td><td><code>{r.subnet}</code></td><td><code>{r.roverRocket}</code></td><td><code>{r.baseRocket}</code></td><td>{r.active ? '🟢 active' : '⛔ shutdown'}</td></tr>
+    ))}
+  </tbody>
+</table>
+
+## Switches
+
+<table>
+  <thead><tr><th></th><th>Hostname</th><th>Model</th><th>IOS</th><th>Loopback</th><th>EIGRP</th></tr></thead>
+  <tbody>
+    <tr><td>Rover</td><td>{SWITCHES.rover.hostname}</td><td>{SWITCHES.rover.model}</td><td>{SWITCHES.rover.ios}</td><td><code>{SWITCHES.rover.loopback}</code></td><td>AS {SWITCHES.rover.eigrpAS} (PIM RP)</td></tr>
+    <tr><td>Base</td><td>{SWITCHES.base.hostname}</td><td>{SWITCHES.base.model}</td><td>{SWITCHES.base.ios}</td><td><code>{SWITCHES.base.loopback}</code></td><td>AS {SWITCHES.base.eigrpAS} (stub)</td></tr>
+  </tbody>
+</table>
+
+## Multicast cameras (UDP {ROVECOMM.multicastPort})
+
+<table>
+  <thead><tr><th>Stream</th><th>Multicast IP</th></tr></thead>
+  <tbody>
+    {MULTICAST_CAMERAS.map(([name, ip]) => (
+      <tr key={name}><td>{name}</td><td><code>{ip}</code></td></tr>
+    ))}
+  </tbody>
+</table>

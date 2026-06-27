@@ -1,0 +1,101 @@
+---
+title: Code & Naming Standards
+description: Modified Hungarian notation, Doxygen, and the conventions reviewers enforce.
+---
+
+# Code & Naming Standards
+
+We use modified Hungarian notation across all of the C++ codebases, and it's not optional in review, because `clang_check` enforces the formatting and the reviewers enforce the naming. The canonical source for all of this is each repo's `CONTRIBUTING.md` and the [C++ Style Guide](../reference/links), and the tables below are reproduced from it.
+
+The reason we bother with it is readability. The prefixes let you look at any variable and immediately know what type it is and whether it's a member or a local variable. On a codebase that a rotating cast of students works on, that saves a lot of time, because you can read unfamiliar code without constantly jumping back to the declarations.
+
+## Signed types
+
+| Type | Prefix | Example |
+|---|---|---|
+| Signed Integer | `n` | `int nExampleSignedInteger` |
+| Signed Long | `l` | `long lExampleSignedLong` |
+| Signed Short | `s` | `short sExampleSignedShort` |
+| Signed Float | `f` | `float fExampleSignedFloat` |
+| Signed Double | `d` | `double dExampleSignedDouble` |
+
+## Unsigned types
+
+| Type | Prefix | Example |
+|---|---|---|
+| Unsigned Char | `uc` | `unsigned char ucExampleUnsignedChar` |
+| Unsigned Integer | `un` | `unsigned int unExampleUnsignedInteger` |
+| Unsigned Long | `ul` | `unsigned long ulExampleUnsignedLong` |
+| Unsigned Short | `us` | `unsigned short usExampleUnsignedShort` |
+| Unsigned Float | `uf` | `unsigned float ufExampleUnsignedFloat` |
+| Unsigned Double | `ud` | `unsigned double udExampleUnsignedDouble` |
+
+## Other common types
+
+| Type | Prefix | Example |
+|---|---|---|
+| Boolean | `b` | `bool bExampleBoolean` |
+| Character | `c` | `char cExampleCharacter` |
+| Vector | `v` | `vector<int> vExampleVector` |
+| Array | `a` | `int aExampleArray[4]` |
+| Deque | `dq` | `deque dqExampleDeque` |
+| Queue | `q` | `queue<int> qExampleQueue` |
+| Priority Queue | `pq` | `priority_queue<int> pqExamplePriorityQueue` |
+| Iterator | `it` | `iterator itExampleIterator` |
+| String | `sz` | `string szExampleString` |
+| Pointer | `p` | `string* pExamplePointer` |
+| Enum | `e` | `ExampleEnum::eExampleUseOfEnum` |
+| Time | `tm` | `time_t tmExampleUseOfTime` |
+| Template | `t` | `T tExampleUseOfTemplateType` |
+| Size | `si` | `size_t siExampleUseOfSize` |
+| Tuple | `tp` | `tuple tpExampleUseOfTuple` |
+| STD Type | `std` | `memory_order stdExampleUseOfMemoryOrder` |
+| Thread | `th` | `jthread thExampleUseOfThread` |
+| Mutex | `mu` | `mutex muExampleUseOfMutex` |
+| Lock | `lk` | `lock lkExampleUseOfLock` |
+| Condition Variable | `cd` | `condition_variable cdExampleUseOfConditionVariable` |
+| Struct | `st` | `StructName stExampleUseOfStruct` |
+| Future | `fu` | `future<void> fuExampleUseOfFuture` |
+| Promise | `pm` | `promise<void> pmExampleUseOfPromise` |
+| Map | `m` | `map<int, int> mExampleUseOfMap` |
+| Unordered Map | `um` | `unordered_map<int, int> umExampleUseOfUnorderedMap` |
+| Set | `s` | `set<int> sExampleUseOfSet` |
+| Unordered Set | `us` | `unordered_set<int> usExampleUseOfUnorderedSet` |
+| Functions | `fn` | `function<void> fnExampleUseOfFunction` |
+
+A couple of prefixes are reused across categories (for example `s` is both a signed short and a set, `us` is both an unsigned short and an unordered set, and `q` is both a queue and Quill). Context makes it obvious in practice, but it's worth knowing they overlap.
+
+## External library types
+
+| Library | Prefix | Example |
+|---|---|---|
+| OpenCV | `cv` | `cv::Mat cvExampleMat` |
+| ZED SDK | `sl` | `sl::Mat slExampleZedMat` |
+| Quill | `q` | `quill::Config qConfig` |
+| GeographicLib | `ge` | `GeographicLib::Geodesic geExampleGeographicType` |
+| Torch | `tr` | `torch::Tensor trExampleTorchType` |
+| WebRTC | `rtc` | `rtc::PeerConnection rtcExampleRTCType` |
+| JSON | `jsn` | `nlohmann::json jsnExampleJSONType` |
+| FFMPEG | `av` | `AVPacket avExampleFFMPEGPacket` |
+| Matplot | `mt` | `axes_handle mtExampleMatplot` |
+| PCL | `pcl` | `PointXYZ pclExamplePCLType` |
+| SQL | `sql` | `sqlite sqlExampleSQLType` |
+| Eigen | `ei` | `MatrixXd eiExampleEigenType` |
+| LibKDTree++ | `tr` | `KDTree trExampleKDTree` |
+
+## Names, macros, and documentation
+
+- Functions, classes, and structs use PascalCase: `InitializeSensor()`, `class StateMachineHandler`.
+- Macros are `ALL_CAPS_WITH_UNDERSCORES`, e.g. `#define AUTONOMY_MAJOR_VERSION 24`.
+- Every file, class, method, and function gets a Doxygen comment block. In the dev container, type `/**` then Enter to scaffold one. Docs build from these automatically on each push to `development`.
+- Formatting is owned by `.clang-format`. Run format-on-save and don't fight it.
+
+## In-code task markers
+
+We tag work in comments with keywords the TODO extension can compile into a list:
+
+`// TODO:`, `// NOTE:`, `// BUG:`, `// HACK:`, `// FIXME:`, `// LEAD:`, `// @todo`, `// ISSUE NOTE:`, `// TEST:`, plus checklist-style `// [ ]` and `// [x]`.
+
+## The C# side
+
+The Blazor Basestation repo follows normal .NET conventions (PascalCase, an `.editorconfig`), not Hungarian. Match whatever the file you're editing already does.

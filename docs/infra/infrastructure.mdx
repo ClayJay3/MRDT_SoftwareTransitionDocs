@@ -1,0 +1,41 @@
+---
+title: Infrastructure
+description: VaultWarden, the AutoPC, and the CCF PC, the things that vanish in a bad handoff.
+---
+
+# Infrastructure
+
+These are the physical/credential pieces that aren't in any repo, exactly the things that go missing in a handoff. Guard them.
+
+## VaultWarden, credentials
+
+We self-host VaultWarden (a lightweight Bitwarden-compatible server) as the team's password and secret vault: switch logins, radio admin, service accounts, Wi-Fi keys, GitHub secrets. It lives at [vaultwarden.craysoftware.com](https://vaultwarden.craysoftware.com).
+
+Right now this is owned and self-hosted personally by Clayton Cowen, on his own PC. That's fine as long as he's reachable, but it's a single point of failure the team should move off of.
+
+:::tip[ACTION]
+Get the vault handed over. Clayton is willing to export the whole vault and hand it to someone on the team to self-host, contact him at **573-836-5811** to arrange it. When you do, stand it up on a team-controlled machine, confirm backups exist (losing this vault means losing every credential), and make sure at least two current officers have break-glass access.
+:::
+
+## AutoPC (SDELC)
+
+A dedicated **Ubuntu** machine in the SDELC (Student Design & Experiential Learning Center). Software members use it to develop on, and it occasionally hosts services for the team. It's also the **x64 self-hosted GitHub Actions runner** (`[self-hosted, linux, X64]`), so it runs the unit/integration tests, the AMD64 package rebuilds, the `autonomy-jammy` image build, and the release job (see [CI/CD](../foundations/github#what-you-have-to-set-up-the-two-runners)). The matching ARM64 runner is a Jetson.
+
+:::tip[ACTION]
+Confirm the runner is registered and online (Org → Settings → Actions → Runners) and set to start on boot, and that you have physical + remote access. If tests or image builds sit "queued" forever, this box (or the Jetson runner) is suspect #1.
+:::
+
+## CCF PC (Simulator / GitLab)
+
+This is the PC that self-hosts the [Simulator's GitLab](../subteams/simulator). The reason it lives where it does is bandwidth: it needs to sit somewhere with a **symmetric gigabit connection**, and the CCF (down the street near the alumni house) was the only place on campus that had one.
+
+The catch is that this machine has to live wherever a team member can physically host it. Over the summer, **Brendan Westley** took the PC and is connecting it from his place in **St. Louis**. So "where is the sim GitLab" is a question whose answer moves around, always confirm who currently has the box.
+
+:::tip[ACTION]
+Find out who currently holds the CCF PC, get GitLab owner rights, clone the sim project, document its build/run, and verify GitLab backups. Plan for it to need a long-term home with good upload bandwidth.
+:::
+
+## Handoff checklist
+
+For each of VaultWarden, the AutoPC, and the CCF PC, write down where it physically is, how to reach it remotely, who has admin on it, and whether backups exist and have actually been tested.
+

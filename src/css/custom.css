@@ -1,0 +1,82 @@
+/**
+ * MRDT Software Bible theme.
+ * Brand mark is the red rover swoosh (#900). The palette below is built around
+ * that rover red, with a brighter red in dark mode so links and accents read
+ * well on a dark background.
+ */
+
+:root {
+  /* Rover red, light mode */
+  --ifm-color-primary: #990000;
+  --ifm-color-primary-dark: #8a0000;
+  --ifm-color-primary-darker: #810000;
+  --ifm-color-primary-darkest: #6b0000;
+  --ifm-color-primary-light: #b30000;
+  --ifm-color-primary-lighter: #cc0000;
+  --ifm-color-primary-lightest: #e60000;
+
+  --ifm-code-font-size: 95%;
+  --docusaurus-highlighted-code-line-bg: rgba(153, 0, 0, 0.1);
+
+  /* A warm off-white page so the red doesn't feel harsh in light mode */
+  --ifm-background-color: #fbfafa;
+  --mrdt-swoosh-red: #c0121a;
+}
+
+/* Brighter red for dark mode so links and accents stay legible */
+[data-theme='dark'] {
+  --ifm-color-primary: #ef5350;
+  --ifm-color-primary-dark: #ed3b38;
+  --ifm-color-primary-darker: #ec2f2b;
+  --ifm-color-primary-darkest: #d81812;
+  --ifm-color-primary-light: #f16b69;
+  --ifm-color-primary-lighter: #f27977;
+  --ifm-color-primary-lightest: #f59f9d;
+
+  --ifm-background-color: #16181a;
+  --ifm-background-surface-color: #1e2023;
+  --docusaurus-highlighted-code-line-bg: rgba(239, 83, 80, 0.15);
+}
+
+/* Thin rover-red line under the navbar to tie the brand in */
+.navbar {
+  border-bottom: 2px solid var(--mrdt-swoosh-red);
+}
+
+/* The swoosh logo is a single deep red (#900). On the dark navbar that reads a
+ * little dim, so brighten it slightly in dark mode. */
+[data-theme='dark'] .navbar-swoosh img {
+  filter: brightness(1.5) saturate(1.15);
+}
+.navbar__logo {
+  height: 2rem;
+}
+
+/* Brand the navbar title a touch */
+.navbar__title {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+/* Give section headings a subtle rover-red-tinted underline accent */
+.markdown > h2 {
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  padding-bottom: 0.3rem;
+}
+
+/* Sidebar active link gets a red left edge instead of a flat highlight */
+.menu__link--active:not(.menu__link--sublist) {
+  border-left: 3px solid var(--ifm-color-primary);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Tables a little cleaner */
+.markdown table th {
+  background: var(--ifm-color-emphasis-100);
+}
+
+/* The ACTION tip callouts are the ones people must act on, so nudge them red */
+.theme-admonition-tip {
+  border-left-color: var(--mrdt-swoosh-red);
+}
