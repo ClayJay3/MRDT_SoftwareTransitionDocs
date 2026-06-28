@@ -1,7 +1,7 @@
 // @ts-check
 
 /**
- * The MRDT Software Bible sidebar — explicitly ordered so the reading path
+ * The MRDT Software Bible sidebar - explicitly ordered so the reading path
  * makes sense: start broad, learn the shared foundations everything depends on,
  * then dive per-subteam, then infra, then the roadmap of what's left.
  *

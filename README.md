@@ -33,14 +33,14 @@ npm run serve      # preview the production build locally
 | `docs/` | All the content (MDX). Folders map to sidebar sections. |
 | `sidebars.js` | The reading order / sidebar structure. |
 | `docusaurus.config.js` | Site config (title, navbar, Mermaid, dark mode). |
-| `src/data/network.js` | **Single source of truth** for the network — boards, IPs, VLANs, radios, switches. The interactive map *and* the reference tables both read from this. Update it here, nowhere else. |
+| `src/data/network.js` | **Single source of truth** for the network - boards, IPs, VLANs, radios, switches. The interactive map *and* the reference tables both read from this. Update it here, nowhere else. |
 | `src/components/visuals/` | Interactive React components (e.g. `NetworkTopology`). |
 
 ## How to add content
 
 - A new page is just a `.mdx` file in `docs/<section>/`, plus an entry in `sidebars.js`.
-- Diagrams: use ```` ```mermaid ```` fenced blocks (flowcharts, state diagrams, sequence diagrams, packet diagrams all work — Mermaid 11).
-- Callout boxes: `:::tip`, `:::note`, `:::info`, `:::warning`, `:::danger` (must start at the beginning of a line — they don't nest inside list items).
+- Diagrams: use ```` ```mermaid ```` fenced blocks (flowcharts, state diagrams, sequence diagrams, packet diagrams all work - Mermaid 11).
+- Callout boxes: `:::tip`, `:::note`, `:::info`, `:::warning`, `:::danger` (must start at the beginning of a line - they don't nest inside list items).
 - Cross-link other docs with the file path **including extension**, e.g. `[Roadmap](../roadmap/roadmap.mdx)`, so links survive slug changes.
 - ⚠️ **MDX gotcha:** bare-URL autolinks like `<https://x.com>` break the build. Use `[text](https://x.com)`.
 
@@ -48,6 +48,5 @@ npm run serve      # preview the production build locally
 
 This is set up to deploy to GitHub Pages under the `MissouriMRDT` org (see `organizationName`/`projectName` in the config). Either:
 - `npm run deploy` (Docusaurus' built-in GitHub Pages publish), or
-- wire a GitHub Action that runs `npm run build` and publishes `build/` — matching how `RoveSoDocs` / `docs.themrdt.org` already work.
+- wire a GitHub Action that runs `npm run build` and publishes `build/` - matching how `RoveSoDocs` / `docs.themrdt.org` already work.
 
-> The "❓ Why is it this way?" callouts throughout the site are open interview questions for Clayton. As they get answered, replace each callout with the real reasoning.

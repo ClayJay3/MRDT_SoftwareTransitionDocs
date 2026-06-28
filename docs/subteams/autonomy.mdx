@@ -4,6 +4,7 @@ description: The C++ brain that drives the rover by itself, architecture, state 
 ---
 
 import StateMachine from '@site/src/components/visuals/StateMachine';
+import FrameVisualizer from '@site/src/components/visuals/FrameVisualizer';
 
 # Autonomy
 
@@ -94,6 +95,10 @@ flowchart LR
 
 The world or global frame is where everything important lives, including the waypoints, the rover position, and the obstacle maps, and it's all in UTM, which is a flat Cartesian grid in meters. We convert GPS lat/lon to UTM as soon as it arrives so that the math stays Euclidean, and the convention is NWU, so +X is north, +Y is west, and +Z is up. The rover or kinematics frame has its origin at the center of the rover with +X forward, +Y left, and +Z up, and the heading is measured clockwise from north. The camera or perception frame is what the ZED SDK and OpenCV hand us, which is left-handed and Y-up with +Z pointing out of the lens. `GeolocateBox` takes a detection's (X, Y, Z) in that camera frame and converts it to a global UTM coordinate by rotating it with the rover's heading and translating it by the rover's UTM position.
 
+Drag the heading and the detection position below to see that transform happen. This is the single most common source of navigation bugs, so it's worth getting a feel for which way the world moves when the rover turns.
+
+<FrameVisualizer />
+
 ## Path planning: global vs. (missing) local
 
 This is the key thing to understand about why we hit rocks. `GeoPlanner` is our global planner, and it works. It builds a 2.5D costmap and runs a kinematically-constrained Weighted A\* over USGS LiDAR terrain to route around the large, permanent features like cliffs and big boulders before we ever drive. It reads a DuckDB database of USGS LAS 1.4 point clouds through `LiDARHandler`, where each cell has a slope, roughness, and curvature that turn into a traversability score, and the LiDAR pipeline in `data/LiDAR/build_lidar_databases.py` turns the raw USGS `.laz` files into those databases per site like MDRS, Hanksville, Tucumcari, and SDELC. The local `AStar` planner exists too, but we don't yet have a true reactive planner that consumes live ZED depth or LiDAR to dodge rocks that aren't in the USGS map, and that gap is exactly why we got stuck.
@@ -136,7 +141,7 @@ We ship three path-following controllers because different parts of the codebase
 | Controller | Used in | Why this one |
 |---|---|---|
 | PID | many places, like steering | simple and well-understood, good for direct single-variable control |
-| Pure Pursuit | search pattern | a simple, robust path-follower for the spiral search |
+| Pure Pursuit | search pattern | a fast, lightweight path-follower for the spiral search |
 | Predictive Stanley | navigation state | tracks the path much more tightly, but only works well for longer, straight or gently curvy routes, and not for paths that cross themselves or loop |
 
 ## How Autonomy talks to everyone

@@ -1,0 +1,54 @@
+.root {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  background: var(--ifm-background-surface-color);
+}
+.layout { display: flex; flex-wrap: wrap; gap: 1.2rem; align-items: flex-start; }
+.svg {
+  flex: 1 1 340px;
+  max-width: 420px;
+  background: var(--ifm-background-color);
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}
+.panel { flex: 1 1 260px; min-width: 240px; }
+
+.grid { stroke: var(--ifm-color-emphasis-200); stroke-width: 1; }
+.worldAxis line { stroke: var(--ifm-color-emphasis-400); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.worldAxis text { fill: var(--ifm-color-emphasis-600); font-size: 11px; font-weight: 700; }
+
+.fov { fill: rgba(97, 175, 239, 0.10); stroke: none; }
+.rover { fill: var(--mrdt-swoosh-red, #c0121a); stroke: #fff; stroke-width: 1; }
+.fwdAxis { stroke: var(--mrdt-swoosh-red, #c0121a); stroke-width: 2.5; }
+.fwdFill { fill: var(--mrdt-swoosh-red, #c0121a); }
+.leftAxis { stroke: #61afef; stroke-width: 2.5; }
+.leftFill { fill: #61afef; }
+.axisLbl { fill: var(--ifm-color-emphasis-700); font-size: 9.5px; font-weight: 700; }
+.ray { stroke: #c678dd; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.obj { fill: #c678dd; stroke: #fff; stroke-width: 1.5; }
+
+.slider { display: block; font-size: 0.84rem; margin-bottom: 0.7rem; color: var(--ifm-font-color-base); }
+.slider span { display: block; margin-bottom: 0.2rem; }
+.slider small { color: var(--ifm-color-emphasis-600); font-weight: 400; }
+.slider input { width: 100%; accent-color: var(--ifm-color-primary); }
+
+.readout {
+  margin-top: 1rem;
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding-top: 0.7rem;
+}
+.step { font-size: 0.85rem; padding: 0.35rem 0; }
+.stepK {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ifm-color-emphasis-600);
+}
+.arrow { font-size: 0.76rem; color: var(--ifm-color-emphasis-500); padding-left: 0.3rem; }
+.result { background: var(--ifm-color-emphasis-100); border-radius: 6px; padding: 0.4rem 0.6rem; margin-top: 0.2rem; }
+.result code { font-size: 0.85rem; }
+.note { font-size: 0.82rem; color: var(--ifm-color-emphasis-700); margin: 0.9rem 0 0; }

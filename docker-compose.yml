@@ -1,4 +1,4 @@
-# MRDT Software Bible — one command to bring up the site.
+# MRDT Software Bible - one command to bring up the site.
 #
 #   docker compose up                 → live-editing dev server at http://localhost:3000
 #                                        (edit any docs/*.mdx and the browser hot-reloads)
@@ -7,25 +7,45 @@
 
 services:
   # Default: hot-reload dev server. Source is bind-mounted so edits are live.
-  site:
-    build:
-      context: .
-      target: dev
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app          # live source
-      - /app/node_modules  # keep the image's node_modules (don't shadow with host)
-    environment:
-      - CHOKIDAR_USEPOLLING=true
-    stdin_open: true
-    tty: true
+  # site:
+  #   build:
+  #     context: .
+  #     target: dev
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - .:/app          # live source
+  #     - /app/node_modules  # keep the image's node_modules (don't shadow with host)
+  #   environment:
+  #     - CHOKIDAR_USEPOLLING=true
+  #   stdin_open: true
+  #   tty: true
 
   # Optional: production static build served by nginx.
   site-prod:
-    profiles: ["prod"]
     build:
       context: .
       target: prod
-    ports:
-      - "8080:80"
+    container_name: mrdt-docs
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mrdt-docs.entrypoints=http"
+      - "traefik.http.routers.mrdt-docs.rule=Host(`docs.craysoftware.com`)"
+      - "traefik.http.middlewares.mrdt-docs-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.mrdt-docs.middlewares=mrdt-docs-https-redirect"
+      - "traefik.http.routers.mrdt-docs-secure.entrypoints=https"
+      - "traefik.http.routers.mrdt-docs-secure.rule=Host(`docs.craysoftware.com`)"
+      - "traefik.http.routers.mrdt-docs-secure.tls=true"
+      - "traefik.http.routers.mrdt-docs-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.mrdt-docs-secure.service=mrdt-docs"
+      - "traefik.http.services.mrdt-docs.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+
+networks:
+  proxy:
+    external: true

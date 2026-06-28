@@ -57,7 +57,7 @@ const config = {
         title: 'MRDT Software Bible',
         logo: {alt: 'MRDT rover swoosh', src: 'img/logo.svg', className: 'navbar-swoosh'},
         items: [
-          {type: 'docSidebar', sidebarId: 'bible', position: 'left', label: 'The Bible'},
+          {type: 'docSidebar', sidebarId: 'bible', position: 'left', label: 'Clayton\'s Old Testament'},
           {
             href: 'https://github.com/MissouriMRDT',
             label: 'GitHub Org',
@@ -91,7 +91,7 @@ const config = {
             ],
           },
         ],
-        copyright: `Mars Rover Design Team, Missouri S&T. Built with Docusaurus. Rove hard.`,
+        copyright: `Mars Rover Design Team`,
       },
       prism: {
         theme: prismThemes.github,

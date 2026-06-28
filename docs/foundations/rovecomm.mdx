@@ -3,6 +3,8 @@ title: RoveComm
 description: Our custom application-layer protocol, packet format, ports, and the manifest.
 ---
 
+import RoveCommPacket from '@site/src/components/visuals/RoveCommPacket';
+
 # RoveComm, our custom protocol
 
 RoveComm is the language every part of the rover speaks. It's a small fixed-header binary protocol that runs over UDP, and over TCP when we need delivery to be guaranteed, and we kept it dead simple on purpose so that an STM32 microcontroller can speak it just as easily as the Jetson can.
@@ -19,15 +21,25 @@ We use UDP for the high-rate stuff like telemetry and drive commands, where low 
 ## The packet: a 6-byte header + payload
 
 ```mermaid
+---
+config:
+  packet:
+    bitsPerRow: 48
+---
 packet-beta
-0-7: "Version (=3)"
-8-23: "Data ID (16-bit, big-endian)"
-24-39: "Data Count (16-bit, big-endian)"
-40-47: "Data Type (enum)"
-48-95: "Payload, Count × sizeof(type), network byte order"
+0-7: "Version"
+8-23: "Data ID"
+24-39: "Data Count"
+40-47: "Data Type"
+48-95: "Payload - Count × sizeof(type) bytes"
 ```
 
-Every packet starts with the same 6 bytes. The version is currently `3`, and if it doesn't match you get an `INVALID_VERSION` reply back. The data ID is what the packet actually is, like `11000` for StartAutonomy, and the IDs are namespaced per board by range. The data count is the number of elements, not the number of bytes, and the data type is one of the values in the table below. Every element gets converted to network byte order with `htons`/`htonl`/`htonll` before it goes out.
+- **Version** (byte 0) - must be `3` or the sender gets `INVALID_VERSION` back.
+- **Data ID** (bytes 1–2, big-endian) - identifies the packet type; IDs are namespaced per board by range (e.g. `11000` = StartAutonomy).
+- **Data Count** (bytes 3–4, big-endian) - number of *elements* in the payload, not bytes.
+- **Data Type** (byte 5) - enum value from the type table below.
+- **Payload** (byte 6+) - `Count × sizeof(type)` bytes, each element in network byte order (`htons`/`htonl`/`htonll`).
+
 
 | Type | Value | Bytes | | Type | Value | Bytes |
 |---|---|---|---|---|---|---|
@@ -38,6 +50,12 @@ Every packet starts with the same 6 bytes. The version is currently `3`, and if 
 | INT32_T | 4 | 4 | | | | |
 
 There are a handful of reserved system packet IDs: `PING=1`, `PING_REPLY=2`, `SUBSCRIBE=3`, `UNSUBSCRIBE=4`, `INVALID_VERSION=5`, and `NO_DATA=6`. A few other globals worth knowing are the target `updateRate` of 100 Hz, the `headerLength` of 6, and the `DE:AD` MAC prefix that all of our boards' MACs start with. The MAC prefix is just an arbitrary value and nothing actually filters on it.
+
+## Try it: build or decode a packet
+
+The fastest way to understand the header is to watch the bytes change. Build a packet from a Data ID, type, and values and see the exact wire bytes, or paste bytes you sniffed off the network and decode them back into fields. The colors map to the [header diagram above](#the-packet-a-6-byte-header--payload).
+
+<RoveCommPacket />
 
 ## A real command, end to end
 

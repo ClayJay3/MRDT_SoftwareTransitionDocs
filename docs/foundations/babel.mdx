@@ -3,10 +3,12 @@ title: Babel (the routing upgrade)
 description: Why we want to replace EIGRP with Babel on Raspberry Pi edge routers.
 ---
 
+import LinkSim from '@site/src/components/visuals/LinkSim';
+
 # Babel, the proposed routing upgrade
 
 :::note[Status: about 90% done, one blocker]
-Babel is almost completely implemented and has been bench-tested working. The one unsolved problem is route flapping, which is covered in [How real is it?](#how-real-is-it) below. Once that's solved it's competition-ready. It all lives in `NetworkAndSignalsInfo/MRDT_Babel_Router/`, and it's the network project worth pushing hardest next year.
+Babel is almost completely implemented and has been bench-tested working. The one unsolved problem is route flapping, which is covered in [How real is it?](#how-real-is-it) below. Once that's solved it's competition-ready. It all lives in [MRDT_Babel_Router](https://github.com/ClayJay3/MRDT_Babel_Router), and it's the network project worth pushing hardest next year.
 :::
 
 ## The problem it solves
@@ -50,6 +52,12 @@ flowchart TD
 ```
 
 So even when we get forced down onto the slow 900 MHz backup, the rover still drives, because the video gets throttled before the joystick does.
+
+## See the difference for yourself
+
+Drag each band's packet loss and compare how the two routing schemes react. EIGRP only knows "up or down," so it keeps load-balancing onto a half-dead link; Babel measures ETX and moves the joystick traffic to the cleanest band before the video.
+
+<LinkSim />
 
 ## How to deploy it
 
