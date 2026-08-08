@@ -17,7 +17,8 @@ This is the backlog, roughly in priority order. Re-read it at the start of every
 ## Networking
 
 1. Ship [Babel](../foundations/babel). It's about 90% done, and the one blocker is route flapping. Fix that and it's competition-ready, and we also get a live network dashboard that EIGRP can't give us. Then regenerate the configs for all three bands ([5.8 GHz is currently shut down](../foundations/network#the-wireless-gap-the-rockets)) and validate PIM multicast and QoS end to end.
-2. Fix the network diagram. The `192.168.256.x` loopback typo should be `.254`, and add the Pi routers if Babel ships.
+2. Evaluate the [MikroTik RB5009 path](../foundations/babel#path-b-the-mikrotik-rb5009-running-openwrt) for Babel. One $219 box per side running OpenWrt replaces both the Raspberry Pi and the Cisco's Layer-3 role, and it gets us off the `network-advantage` licensing trap. Buy one, flash it, and port the FRR config, which carries over almost verbatim, so this is a small job with a big payoff. Before ordering, answer the two open questions: what is actually drawing PoE off each Cisco today, and what voltage the rover power bus runs at, since the RB5009 wants 24 to 57 V.
+3. Fix the network diagram. The `192.168.256.x` loopback typo should be `.254`, and add the edge routers if Babel ships.
 
 ## Basestation
 

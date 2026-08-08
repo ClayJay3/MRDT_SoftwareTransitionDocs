@@ -133,4 +133,4 @@ Both switch backups contain the `enable secret` and `admin` password hashes. The
 | EIGRP | AS 90 | AS 90 (stub) |
 | Multicast | PIM RP | `ip multicast-routing distributed` |
 
-The current EIGRP setup is solid wired technology, but it struggles on a mobile, lossy wireless link, and the proposed fix is a pair of Raspberry Pi edge routers running [Babel](./babel).
+The current EIGRP setup is solid wired technology, but it struggles on a mobile, lossy wireless link. The proposed fix is [Babel](./babel), running either on a pair of Raspberry Pi edge routers hung off these switches, or on a pair of MikroTik RB5009s that take over their routing role entirely.
