@@ -42,6 +42,7 @@ services:
       - "traefik.http.routers.mrdt-docs-secure.rule=Host(`docs.craysoftware.com`)"
       - "traefik.http.routers.mrdt-docs-secure.tls=true"
       - "traefik.http.routers.mrdt-docs-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.mrdt-docs-secure.middlewares=authentik@file"
       - "traefik.http.routers.mrdt-docs-secure.service=mrdt-docs"
       - "traefik.http.services.mrdt-docs.loadbalancer.server.port=80"
       - "traefik.docker.network=proxy"

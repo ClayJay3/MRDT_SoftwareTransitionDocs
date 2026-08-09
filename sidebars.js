@@ -23,6 +23,7 @@ const sidebars = {
         'foundations/rovecomm',
         'foundations/network',
         'foundations/babel',
+        'foundations/signals',
         'foundations/gps',
         'foundations/github',
         'foundations/standards',

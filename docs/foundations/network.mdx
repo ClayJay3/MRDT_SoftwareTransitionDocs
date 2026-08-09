@@ -89,6 +89,8 @@ We dropped 5.8 GHz this year because its range was so short that it only really 
 
 The rockets run in transparent bridge mode, which is why they're invisible to the routing (see the topology above). For the antennas, we use a sector for 2.4 GHz, and for 900 MHz we use a yagi on the basestation side and two omnis on the rover side. This is all shared with the electrical and signal-stack folks, so coordinate with them on the RF tuning and aiming.
 
+There's a proposed replacement for the 2.4 and 5.8 GHz rockets, a single MikroTik NetMetal ax per side that runs both bands at once, along with the antennas it forces you to buy and why. That's all on [Signals](./signals).
+
 ## Routing: EIGRP AS 90 (today)
 
 Both switches run EIGRP autonomous system 90, and there are a couple of details worth knowing. With `maximum-paths 3` and `variance 3`, EIGRP load-balances across all three radio links at once even when their costs are unequal, so it's not just using one link at a time, and when all the bands are up it spreads the traffic across them. It also runs `bfd all-interfaces` with `hello 1 / hold 3` on the radio links, so Bidirectional Forwarding Detection fails a dead link over in milliseconds instead of waiting on the routing timers. The base switch is set up as an EIGRP stub with `eigrp stub connected summary`, so it only advertises its own connected networks, which keeps the topology simple and the query traffic low.
