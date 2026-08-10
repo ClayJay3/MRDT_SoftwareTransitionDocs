@@ -85,6 +85,89 @@
 
 .scenes { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: flex-start; }
 .sceneMain { flex: 3 1 380px; min-width: 0; }
+.sceneMain > * + * { margin-top: 0.7rem; }
+
+/* ------------------------------------------------------------------- map */
+
+.mapRow { display: flex; flex-wrap: wrap; gap: 0.7rem; align-items: stretch; }
+.mapBox { flex: 0 1 360px; min-width: 0; }
+.mapInfo {
+  flex: 1 1 190px;
+  min-width: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: var(--ifm-background-color);
+}
+.mapInfo h6 {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-primary);
+}
+.mapSub {
+  margin: 0.1rem 0 0.45rem;
+  font-size: 0.72rem;
+  color: var(--ifm-color-emphasis-600);
+}
+.mapAttr {
+  margin: 0.5rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--ifm-color-emphasis-600);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding-top: 0.4rem;
+}
+
+/* Pointer dragging needs touch-action off or mobile scrolls instead of drags. */
+.map { touch-action: none; cursor: crosshair; user-select: none; background: var(--ifm-color-emphasis-200); border-radius: 8px; }
+
+.mapStage { position: relative; line-height: 0; }
+.mapLayers, .mapZoom { position: absolute; display: flex; gap: 0.2rem; }
+.mapLayers { top: 0.4rem; right: 0.4rem; }
+.mapZoom { bottom: 0.4rem; left: 0.4rem; flex-direction: column; }
+.mapChip {
+  font-size: 0.68rem;
+  line-height: 1.5;
+  font-weight: 600;
+  min-width: 1.6rem;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 5px;
+  padding: 0.1rem 0.4rem;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.86);
+  color: #111;
+}
+.mapChip:hover:not(:disabled) { background: #fff; }
+.mapChip:disabled { opacity: 0.4; cursor: default; }
+.mapChipOn { background: var(--ifm-color-primary); border-color: var(--ifm-color-primary); color: #fff; }
+.mapHint {
+  margin: 0.35rem 0 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-600);
+}
+.mapLbl {
+  font-size: 26px;
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 3px;
+}
+
+.mapPrompt {
+  flex: 1 1 100%;
+  border: 1px dashed var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  padding: 0.8rem 0.9rem;
+  background: var(--ifm-background-color);
+  font-size: 0.8rem;
+}
+.mapPrompt b { display: block; margin-bottom: 0.2rem; }
+.mapPrompt span { display: block; color: var(--ifm-color-emphasis-700); margin-bottom: 0.5rem; }
 .sceneSide { flex: 1 1 200px; display: flex; flex-wrap: wrap; gap: 0.7rem; min-width: 0; }
 .sceneSide > * { flex: 1 1 180px; min-width: 0; }
 

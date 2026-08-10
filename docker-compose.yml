@@ -26,6 +26,15 @@ services:
     build:
       context: .
       target: prod
+      # This host resolves DNS via 127.0.0.1, and BuildKit strips loopback
+      # nameservers when it builds the sandbox's resolv.conf — so npm inside a
+      # normal build cannot reach the registry at all. Building on the host
+      # network namespace gives it a resolver that works.
+      #
+      # Remove this line once the daemon has real nameservers, i.e. once
+      # /etc/docker/daemon.json carries  "dns": ["8.8.8.8", "1.1.1.1"]
+      # and docker has been restarted.
+      network: host
     container_name: mrdt-docs
     restart: unless-stopped
     environment:

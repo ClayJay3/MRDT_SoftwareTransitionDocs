@@ -29,9 +29,11 @@ We disabled 5.8 GHz because its Fast Ethernet port bottlenecked the bandwidth an
 **ACTION:** Confirm the M900 can retune across all three bands at 8 MHz and that a team member can configure it in the field during the [15 minute setup window](#the-rules-that-shape-this).
 :::
 
-The range issue requires a closer look. At 1 km, a 5.8 GHz link budget is mathematically easy to achieve. Free space loss is roughly 108 dB. A mid-gain sector hitting a small omni antenna results in signal levels in the low negative sixties dBm against a receiver sensitivity in the negative seventies. There is over 20 dB of unused margin. 
+The range issue requires a closer look. At 1 km, free space loss on 5.8 GHz is roughly 108 dB, and a mid-gain sector hitting a small omni lands around **-65 dBm** against a receiver that needs about -70 for its top useful rate. That is a handful of dB of margin at the top rate, not the twenty the free space number alone would suggest.
 
-What actually destroys a 5.8 GHz link is geometry. Terrain blocks the Fresnel zone, rover pitch pushes the base station into an antenna pattern null, and mounting elements directly to a metal chassis ruins the signal shape.
+The difference is the ground. A 3 m mast talking to an antenna 1.2 m off the dirt never gets a free space path: the reflected ray comes back nearly as strong as the direct one and phase-flipped, so the two partly cancel. Past roughly **4π·h₁·h₂/λ** — about 875 m for a 3 m mast at 5.8 GHz — that cancellation deepens and loss climbs as the fourth power of distance instead of the second. Drop the mast from 3 m to 1 m on an otherwise perfect path and you pay **9 dB** for nothing.
+
+That is why geometry, not gain, destroys these links. Terrain blocks the Fresnel zone, the ground bounce quietly eats the budget the free space number promised you, rover pitch pushes the base station into an antenna pattern null, and mounting elements directly to a metal chassis ruins the signal shape.
 
 **Stop shopping for more antenna gain and start fixing the RF path.** That is the core lesson of this upgrade.
 
@@ -80,9 +82,15 @@ The system requires **two RF paths per side**. Both must be dual-band and dual-p
 
 The 900 MHz Rocket M900 keeps its yagi and its rover omnidirectional antennas. That system remains untouched.
 
-**The rover antennas must be deliberately low gain.** A high-gain omnidirectional antenna creates a signal shaped like a thin, flat donut. When the rover drives onto a steep incline, that donut tilts, and the base station drops entirely out of the signal path. On a 1 km link with 22° of vehicle pitch, a 9 dBi antenna gives the base station -83 dBm and a weak MCS4 connection. A smaller 3 dBi element on the exact same link delivers -71 dBm and MCS8. 
+:::tip[A dual-band antenna is not the same antenna on both bands]
+An aperture keeps its physical size, not its beamwidth. Moving from 5.8 GHz down to 2.4 GHz stretches every beamwidth by the wavelength ratio of **2.38×**. A panel has two dimensions of aperture and gives up `20log₁₀(2.38) ≈ 7.5 dB`; a vertical omni has only one and gives up `10log₁₀(2.38) ≈ 3.8 dB`. That is exactly why the rover omni is spec'd 6.7 dBi at 5 GHz and 3.6 dBi at 2.4.
 
-The smaller antenna performs **12 dB better** in this scenario because a 9 dBi beam is only 14° tall. A 22° pitch walks the base station completely out of the high-gain beam. Using pigtail extensions on the rover matters for the same reason. An antenna bolted directly to a metal chassis creates blind spots that no amount of base station gain can fix.
+So the SignalPlus panel is an 18 dBi, 20°×20° sector on 5.8 GHz and roughly a **12.6 dBi, 48°×48°** sector on 2.4. Do not budget it as 18 dBi on both. The upside is that the wider 2.4 GHz beam is far more forgiving of a rover that has wandered off boresight, which is a sensible division of labour: 5.8 for rate inside the corridor, 2.4 for coverage outside it.
+:::
+
+**The rover antennas must be deliberately low gain.** A high-gain omnidirectional antenna creates a signal shaped like a thin, flat donut. When the rover drives onto a steep incline, that donut tilts, and the base station drops entirely out of the signal path. On a 1 km link with 22° of vehicle pitch, a 9 dBi antenna lands **20 dB down its own pattern**, leaving the rover on -85 dBm and a weak MCS4. A 3 dBi element on the exact same link is only 1.7 dB off its peak, holding -72 dBm and MCS8.
+
+The smaller antenna performs **12 dB better** in this scenario because a 9 dBi beam is only 14° tall, while a 3 dBi one is 57°. A 22° pitch walks the base station completely out of the high-gain beam. Using pigtail extensions on the rover matters for the same reason. An antenna bolted directly to a metal chassis creates blind spots that no amount of base station gain can fix.
 
 ## What matters on a spec sheet
 
@@ -123,19 +131,23 @@ Receive gain is not capped by the FCC. Upgrading antenna gain does exactly one t
 
 When you buy a high-gain antenna, you are paying for receive margin by sacrificing coverage width:
 
-| Antenna | Received at base, 1 km | Margin vs MCS9 | Lateral coverage at 1 km |
-|---|---|---|---|
-| SignalPlus panel, 18 dBi | -61 dBm | 9 dB | ±176 m |
-| RadioLabs, 12 dBi | -67 dBm | 3 dB | ±315 m |
-| ALFA pair, 10 dBi | -68 dBm | 2 dB | ±650 m |
+| Antenna | Received at base, 1 km | Usual rate | Link uptime | Capacity | Lateral coverage at 1 km |
+|---|---|---|---|---|---|
+| SignalPlus panel, 18 dBi | -65 dBm | MCS11 | 100% | 147 Mbps | ±176 m |
+| RadioLabs, 12 dBi | -69 dBm | MCS8 | 100% | 125 Mbps | ±315 m |
+| ALFA pair, 10 dBi | -71 dBm | MCS8 | 100% | 117 Mbps | ±649 m |
 
-All three options successfully close the link at 1 km on both bands. You are trading **±176 m of lateral driving space for 6 dB of signal margin.** Inside a narrow 350 m corridor, the high-gain antenna is great. If the rover drives wider than that, the cheap wide-beam option wins. A rover outside a narrow beam loses the link entirely, and extra signal margin cannot fix a dead link.
+Read that table carefully, because the interesting column is the one that does not vary. **All three hold the link 100% of the drive at 1 km**, and all three carry the mission out to roughly 3.5 km. The mission needs 8 Mbps; the cheapest option here delivers 117.
+
+So the 6 dB of extra gain buys you throughput you have no use for, and charges you **±473 m of lateral driving space** for it. Inside a narrow 350 m corridor the high-gain antenna is great. If the rover drives wider than that, the cheap wide-beam option wins outright: a rover outside a narrow beam loses the link entirely, and no amount of signal margin fixes a dead link.
 
 Rule 3.b.iii allows a third option: **steer the antenna.** A mechanized mount driven from the C2 station is perfectly legal if you aim it using RSSI data or relayed GNSS coordinates. You just cannot aim it by eye or through a dedicated antenna camera. Active tracking turns a narrow beam from a liability into free signal margin. It is the only way a 20° sector makes sense on a wide course.
 
 ## Play with it
 
-Drag the mast height slider below to watch the Fresnel zone lift off the ridge. Toggle the Part 15 EIRP cap to see the transmit side flatly refuse to improve with higher gain. The scenario buttons represent common mistakes this page is designed to prevent.
+Drag the mast height slider on a clear path and watch the *ground bounce* line, not the Fresnel zone: 1 m of mast costs 11 dB against free space, 3 m costs 1.5, and 6 m is actually 3.6 dB **better** than free space. Nothing else on the page moves the budget that far. Then toggle the Part 15 EIRP cap to see the transmit side flatly refuse to improve with higher gain, and watch **link uptime** rather than the headline Mbps. Uptime is the bottom rung's availability — the fraction of the drive you have a link at all — and it is the number that actually fails. A link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades; that is normal and fine. Uptime falling below 100% is not. The scenario buttons represent common mistakes this page is designed to prevent.
+
+Then switch **Terrain** from *flat + ridge* to **MDRS** or **Rolla** and do the siting exercise properly. Those are real USGS heightmaps, 6 km square at 30 m resolution, over USGS orthoimagery at 3.75 m — so you can put the tripod on a specific rise, road or wash rather than a coloured blob. Drag the base station around, swing the handle to aim the sector, drag the rover to set its bearing and range, and zoom in to 8× when you need to be precise about where something sits. The *Both* layer tints the imagery by elevation if you want the contours back. At MDRS you can find headings from the same spot that swing between a clear path and 60 dB of diffraction — which is the entire argument for [siting the tripod carefully and asking for the 20 m exception](#mounting-and-cabling), made concrete.
 
 <SignalLab />
 
@@ -146,14 +158,18 @@ The C2 station is typically a metal trailer with the course deliberately blocked
 
 It specifies *communications cable*. Do not use coax. Running 25 m of LMR-400 coax loses roughly **18 dB** of signal at 5.8 GHz. You must mount the radio directly at the antenna, feed it over a long PoE Ethernet run, and keep all coax jumpers under one meter.
 
-The failure here is deceptive. If you run 25 m of coax on a flat bench test, the link survives but drops from MCS11 to MCS7. You likely would not notice the issue. In the field, you just spent the 18 dB of slack meant to push a signal over a ridge. Adding 25 m of coax alongside 22° of rover pitch drops the link to MCS0. Adding coax alongside a physical ridge means the link will not close at 1 km at all.
+The failure here is deceptive. If you run 25 m of coax on a flat bench test at 1 km, the link survives and merely drops from MCS11 to MCS6. Link uptime stays at 100%, the airtime figure only moves from 6% to 11%, and you would very likely ship it. What you actually did was spend the 18 dB of slack meant to push a signal over a ridge.
+
+Stack anything else on top and it collapses, and it collapses in the column you were not watching. Coax plus 22° of rover pitch drops both directions to the bottom rung and takes **link uptime from 100% to 53%** — the airtime is a comfortable 74%, so the throughput arithmetic still says yes while the link itself is gone half the drive. Coax plus a real 8 m ridge finishes it: 46% uptime and no video past about 500 m. Watch uptime, not Mbps.
 :::
 
 Throw away the cheap RG58 coax jumpers bundled with consumer antennas. RG58 loses about 1.4 dB per meter at 5.8 GHz. Using the standard 5 m leads included with the antenna costs you 7 dB per side.
 
 **Mount the sector flat.** A 15 dBi, 90° sector has an extremely tight 7° vertical elevation beam. If you apply a 10° downtilt from a 3 m mast, you will drive the main lobe straight into the dirt 17 m in front of you.
 
-**Mast height is your dominant variable, and rule 3.b.iv caps it at 3 m.** This is a hard constraint, not a design choice. The first Fresnel zone at 1 km requires 3.6 m of clearance at the midpoint on 5.8 GHz, and 5.6 m on 2.4 GHz. A 3 m mast cannot physically clear rolling ground. Behind a real ridge, 5 GHz vanishes because the wavelength is too short to diffract effectively. 2.4 GHz performs slightly better, and sub-GHz frequencies perform significantly better. This physics reality is exactly why 900 MHz remains a core part of the architecture.
+**Mast height is your dominant variable, and rule 3.b.iv caps it at 3 m.** This is a hard constraint, not a design choice, and it costs you twice. The first Fresnel zone at 1 km requires 3.6 m of clearance at the midpoint on 5.8 GHz and 5.6 m on 2.4 GHz, so a 3 m mast cannot physically clear rolling ground. It also parks you right at the ground-reflection crossover: at 3 m the bounce costs 1.5 dB at 1 km, at 6 m it would *give* you 3.6 dB, and at 1 m it costs 11 dB. Every metre of mast you are allowed is worth more than any antenna on the market.
+
+Behind a real ridge the band ordering flips. On a clear 1 km path 5.8 GHz beats 2.4 by about 6 dB once you account for the panel losing 7.5 dB of gain on the lower band. Put an 8 m ridge in the path and 5.8 GHz pays **20.2 dB** of knife-edge diffraction against 2.4 GHz's **16.7 dB**, which is enough to hand the win back to 2.4 — MCS7 instead of MCS6. That 3.5 dB is real but modest, which is the point: the diffraction advantage only gets decisive as you go much lower in frequency, and that is exactly why 900 MHz remains a core part of the architecture rather than a legacy holdover.
 
 Siting the base station is the best lever you have. Normally, the antenna base is restricted to within 5 m of the C2 station. At MDRS structures, a judge may allow you to place it **up to 20 m away** to clear buried cables or blocking structures. Always ask for this exception. Moving the tripod 20 m onto a natural rise outperforms any hardware upgrade you can buy.
 
