@@ -12,8 +12,22 @@ component synchronous and SSR safe.
 Every value is cross-checked against the USGS ned10m dataset served by
 opentopodata.org before anything is written.
 
+Two resolutions come out of this, because the two jobs have different budgets:
+
+  * a COARSE grid, inlined as base64 in src/data/terrain.js. It is what server
+    rendering and the first paint use, so it has to be in the JS bundle and
+    therefore has to be small.
+  * a FINE grid, written as a raw int16 file under static/. The browser fetches
+    it once per site, caches it, and swaps it in — so the diffraction and
+    Fresnel numbers settle onto 3DEP's own resolution instead of a 30 m
+    resample. Nothing downstream becomes async: the model keeps reading
+    whichever grid is loaded right now.
+
+FINE_GRID is set so the sample spacing lands on 3DEP 1/3 arc-second (~10 m).
+Going finer only interpolates, so it would cost bytes and buy nothing.
+
 Usage:  python3 scripts/fetch_terrain.py
-Writes: src/data/terrain.js
+Writes: src/data/terrain.js, static/data/terrain/*.bin, static/img/terrain/*.webp
 """
 
 import base64
@@ -30,16 +44,24 @@ from PIL import Image
 
 # --------------------------------------------------------------------------- config
 
-ZOOM = 13          # ~15 m/px at these latitudes, 3DEP-derived over CONUS
+# z14 is ~7.5 m/px at these latitudes, which is the finest the 3DEP-derived
+# terrarium tiles carry anything new at. Both grids are sampled out of the one
+# mosaic so they cannot disagree about the ground.
+ZOOM = 14
 SPAN_M = 6000.0    # side length of the square window, metres
-GRID = 200         # samples per side -> 30 m/px
+GRID = 200         # inlined in the JS bundle -> 30 m/sample
+FINE_GRID = 512    # fetched at runtime -> 11.7 m/sample, i.e. 3DEP native
 TILE = 256
 
-# Orthoimagery for the map background. z15 is ~3.7 m/px at these latitudes, so
-# 1600 px covers the 6 km window at native resolution with no upsampling — good
-# for roughly 4x zoom before it softens.
-IMG_ZOOM = 15
-IMG_PX = 1600
+# Orthoimagery for the map background. This is the baked fallback: it is what
+# renders before any tile arrives and what the map falls back to offline, so it
+# covers the whole window in one file. z16 is ~1.9 m/px at these latitudes and
+# is the deepest level USGS actually caches — 2048 px over 6 km is 2.9 m/px,
+# close enough to that ceiling to be worth the bytes and no further.
+#
+# Past 1x the map layers live USGS tiles on top of this; see signalViews.js.
+IMG_ZOOM = 16
+IMG_PX = 2048
 IMG_QUALITY = 82
 
 SITES = [
@@ -182,11 +204,38 @@ def window_pixels(lat, lon, n, zoom):
 
 
 def sample_site(site, cache):
-    """Return a GRID x GRID array of elevations, row 0 = north edge."""
+    """Return (coarse, fine) elevation grids, row 0 = north edge.
+
+    One mosaic, sampled twice. Resampling the coarse grid out of the fine one
+    instead would alias the ridgelines the coarse grid exists to draw.
+    """
     lat, lon = site["lat"], site["lon"]
     mosaic, px0, py0 = build_mosaic(lat, lon, ZOOM, TILE_URL, cache, decode_terrarium)
-    gx, gy = window_pixels(lat, lon, GRID, ZOOM)
-    return bilinear(mosaic, gx - px0, gy - py0)
+    out = []
+    for n in (GRID, FINE_GRID):
+        gx, gy = window_pixels(lat, lon, n, ZOOM)
+        out.append(bilinear(mosaic, gx - px0, gy - py0))
+    return out[0], out[1]
+
+
+def write_fine(site, fine, base, out_dir):
+    """Write the fine grid as raw int16 decimetres above `base`, row-major.
+
+    No base64 and no JSON: this one is fetched rather than bundled, so it can be
+    the bytes themselves and halve on the wire for free.
+    """
+    dm = np.rint((fine - base) * 10.0).astype(np.int32)
+    if dm.min() < -32768 or dm.max() > 32767:
+        raise RuntimeError("relief exceeds int16 range in decimetres")
+    os.makedirs(out_dir, exist_ok=True)
+    name = f"{site['id']}.bin"
+    path = os.path.join(out_dir, name)
+    with open(path, "wb") as f:
+        f.write(dm.astype("<i2").tobytes())
+    kb = os.path.getsize(path) // 1024
+    print(f"    fine grid {FINE_GRID}x{FINE_GRID} ({SPAN_M / (FINE_GRID - 1):.1f} m/sample), {kb} KB",
+          flush=True)
+    return name, kb
 
 
 def sample_imagery(site, cache, out_dir):
@@ -209,14 +258,15 @@ def sample_imagery(site, cache, out_dir):
 # ------------------------------------------------------------------- verification
 
 
-def verify(site, grid):
-    """Spot-check the baked grid against USGS ned10m via opentopodata."""
+def verify(site, grid, label="grid"):
+    """Spot-check a baked grid against USGS ned10m via opentopodata."""
     lat, lon = site["lat"], site["lon"]
+    n = grid.shape[0]
     half = SPAN_M / 2.0
-    step = SPAN_M / (GRID - 1)
+    step = SPAN_M / (n - 1)
     rng = np.random.default_rng(7)
-    idx = [(GRID // 2, GRID // 2)] + [
-        (int(r), int(c)) for r, c in rng.integers(10, GRID - 10, size=(11, 2))
+    idx = [(n // 2, n // 2)] + [
+        (int(r), int(c)) for r, c in rng.integers(10, n - 10, size=(11, 2))
     ]
 
     pts, mine = [], []
@@ -237,8 +287,8 @@ def verify(site, grid):
     ref = [x["elevation"] for x in data["results"]]
     diffs = [abs(a - b) for a, b in zip(mine, ref) if b is not None]
     worst = max(diffs)
-    print("    checked %d points against USGS ned10m: mean |dz| %.2f m, worst %.2f m"
-          % (len(diffs), sum(diffs) / len(diffs), worst), flush=True)
+    print("    %s: checked %d points against USGS ned10m: mean |dz| %.2f m, worst %.2f m"
+          % (label, len(diffs), sum(diffs) / len(diffs), worst), flush=True)
     if worst > 25.0:
         raise RuntimeError(f"terrain disagrees with USGS by {worst:.1f} m — refusing to write")
     return sum(diffs) / len(diffs), worst
@@ -251,21 +301,27 @@ def main():
     here = os.path.dirname(os.path.abspath(__file__))
     out_path = os.path.join(here, "..", "src", "data", "terrain.js")
     img_dir = os.path.normpath(os.path.join(here, "..", "static", "img", "terrain"))
+    bin_dir = os.path.normpath(os.path.join(here, "..", "static", "data", "terrain"))
     cache = {}
     blocks = []
 
     for site in SITES:
         print(f"  {site['id']}: {site['lat']}, {site['lon']}", flush=True)
-        grid = sample_site(site, cache)
-        mean_err, worst_err = verify(site, grid)
+        grid, fine = sample_site(site, cache)
+        mean_err, worst_err = verify(site, grid, "coarse")
+        verify(site, fine, "fine")
         image, image_kb = sample_imagery(site, cache, img_dir)
 
-        base = float(np.floor(grid.min()))
+        # Both grids share one floor, so the fine file can be decoded with the
+        # `base` already in the JS module and nothing has to agree twice.
+        base = float(np.floor(min(grid.min(), fine.min())))
         # decimetres above the site floor keeps 0.1 m precision inside int16
         dm = np.rint((grid - base) * 10.0).astype(np.int32)
         if dm.max() > 32767:
             raise RuntimeError("relief exceeds int16 range in decimetres")
         payload = base64.b64encode(dm.astype("<i2").tobytes()).decode("ascii")
+
+        fine_name, fine_kb = write_fine(site, fine, base, bin_dir)
 
         print("    elevation %.1f..%.1f m (relief %.1f m), %d KB base64"
               % (grid.min(), grid.max(), grid.max() - grid.min(), len(payload) // 1024),
@@ -278,12 +334,14 @@ def main():
             "lat": site["lat"],
             "lon": site["lon"],
             "base": base,
-            "min": round(float(grid.min()), 1),
-            "max": round(float(grid.max()), 1),
+            "min": round(float(min(grid.min(), fine.min())), 1),
+            "max": round(float(max(grid.max(), fine.max())), 1),
             "checkMean": round(mean_err, 2),
             "checkWorst": round(worst_err, 2),
             "image": image,
             "imageKb": image_kb,
+            "fine": 'data/terrain/' + fine_name,
+            "fineKb": fine_kb,
             "data": payload,
         })
 
@@ -301,11 +359,19 @@ def main():
         "// so the contours land exactly where the imagery says they should. The files",
         "// live in static/img/terrain/ and are fetched by the browser, not bundled.",
         "//",
+        "// Two grids per site, because SSR and accuracy want different things:",
+        "//",
+        f"//   * the inlined one below — {GRID}x{GRID}, {SPAN_M / (GRID - 1):.1f} m per sample — is what the",
+        "//     bundle carries, so it renders on the server and on the first frame.",
+        f"//   * `fine` names a {FINE_GRID}x{FINE_GRID} file ({SPAN_M / (FINE_GRID - 1):.1f} m per sample, i.e. 3DEP's own",
+        "//     resolution) under static/. The browser fetches it once, and installFine()",
+        "//     swaps it in underneath a model that never learns it happened.",
+        "//",
         "// Heights are int16 decimetres above `base`, row-major, row 0 = north edge,",
-        f"// column 0 = west edge, {GRID}x{GRID} samples over a {SPAN_M / 1000:.0f} km square"
-        f" ({SPAN_M / (GRID - 1):.1f} m per sample).",
+        f"// column 0 = west edge, over a {SPAN_M / 1000:.0f} km square. Both grids share one `base`.",
         "",
         f"export const GRID = {GRID};",
+        f"export const FINE_GRID = {FINE_GRID};",
         f"export const SPAN_M = {SPAN_M:.0f};",
         f"export const STEP_M = SPAN_M / (GRID - 1);",
         "",
@@ -321,11 +387,20 @@ def main():
             f"    base: {b['base']}, min: {b['min']}, max: {b['max']},",
             f"    // agreement with USGS ned10m: mean {b['checkMean']} m, worst {b['checkWorst']} m",
             f"    image: {json.dumps('img/terrain/' + b['image'])}, // {b['imageKb']} KB",
+            f"    fine: {json.dumps(b['fine'])}, // {b['fineKb']} KB, {FINE_GRID}x{FINE_GRID} int16",
             f"    data: {json.dumps(b['data'])},",
             "  },",
         ]
     lines += [
         "];",
+        "",
+        "// Every grid carries the side length it was sampled at, so a consumer never",
+        "// has to know which of the two it is holding — and swapping one for the other",
+        "// cannot silently reinterpret the rows.",
+        "const tag = (arr, n) => {",
+        "  arr.n = n;",
+        "  return arr;",
+        "};",
         "",
         "// Base64 -> Int16Array, decoded once on first use. Works in Node (SSR) and in",
         "// the browser without touching any DOM API.",
@@ -343,9 +418,26 @@ def main():
         "  const dm = new Int16Array(bytes.buffer);",
         "  const out = new Float32Array(dm.length);",
         "  for (let i = 0; i < dm.length; i++) out[i] = site.base + dm[i] / 10;",
-        "  decoded.set(id, out);",
-        "  return out;",
+        "  decoded.set(id, tag(out, GRID));",
+        "  return decoded.get(id);",
         "}",
+        "",
+        "// Replace a site's grid with the fine one, given the raw int16 file. Returns",
+        "// false rather than throwing on a short or truncated read, because a half a",
+        "// heightmap is worse than the coarse one we already have.",
+        "export function installFine(id, buffer) {",
+        "  const site = SITES.find((s) => s.id === id);",
+        "  if (!site) return false;",
+        "  const want = FINE_GRID * FINE_GRID;",
+        "  if (buffer.byteLength !== want * 2) return false;",
+        "  const dm = new Int16Array(buffer);",
+        "  const out = new Float32Array(want);",
+        "  for (let i = 0; i < want; i++) out[i] = site.base + dm[i] / 10;",
+        "  decoded.set(id, tag(out, FINE_GRID));",
+        "  return true;",
+        "}",
+        "",
+        "export const gridIsFine = (id) => (decoded.get(id) || {}).n === FINE_GRID;",
         "",
     ]
 

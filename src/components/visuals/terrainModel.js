@@ -3,9 +3,59 @@
 //
 // Everything here is pure and synchronous so the component stays SSR safe.
 
-import {GRID, SPAN_M, STEP_M, SITES, heightGrid} from '../../data/terrain';
+import {
+  FINE_GRID,
+  GRID,
+  SITES,
+  SPAN_M,
+  STEP_M,
+  gridIsFine,
+  heightGrid,
+  installFine,
+} from '../../data/terrain';
 
-export {GRID, SPAN_M, STEP_M, SITES, heightGrid};
+export {FINE_GRID, GRID, SPAN_M, STEP_M, SITES, gridIsFine, heightGrid};
+
+// Every grid knows its own side length, so nothing here has to care whether it
+// is holding the bundled 200x200 or the fetched 512x512.
+const sideOf = (grid) => grid.n || GRID;
+
+// ------------------------------------------------------- fetching the fine grid
+//
+// The bundled grid is 30 m a sample, which is coarser than the 3DEP data it came
+// from and coarse enough to miss the small rises that decide whether a path
+// clears. The finer one is a plain int16 file under static/, so it is fetched
+// once per site, cached by the browser like any other asset, and installed
+// underneath a model that stays entirely synchronous — solve() keeps calling
+// heightGrid() and simply starts getting better ground back.
+//
+// Failure is not an error condition: no network, a 404, a truncated read all
+// leave the coarse grid in place and the page working.
+
+// `url` is the site's `fine` path already run through Docusaurus' baseUrl, which
+// only a component can do — so the caller supplies it rather than this module
+// guessing where the site is mounted.
+const pending = new Map();
+
+export function loadFineGrid(id, url) {
+  if (typeof fetch === 'undefined') return Promise.resolve(false);
+  if (gridIsFine(id)) return Promise.resolve(false);
+  if (pending.has(id)) return pending.get(id);
+
+  const site = SITES.find((s) => s.id === id);
+  if (!site || !site.fine || !url) return Promise.resolve(false);
+
+  const job = fetch(url)
+    .then((r) => (r.ok ? r.arrayBuffer() : null))
+    .then((buf) => (buf ? installFine(id, buf) : false))
+    .catch(() => false)
+    // A failed fetch is allowed to be retried by a later mount; a successful one
+    // never runs again because gridIsFine short-circuits above.
+    .finally(() => pending.delete(id));
+
+  pending.set(id, job);
+  return job;
+}
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 const log10 = (x) => Math.log(x) / Math.LN10;
@@ -22,20 +72,22 @@ const K_FACTOR = 4 / 3;
 // site centre. Outside the map we clamp to the edge, which reads as "flat from
 // here on" rather than as a cliff.
 export function sampleHeight(grid, e, n) {
+  const g = sideOf(grid);
+  const step = SPAN_M / (g - 1);
   const half = SPAN_M / 2;
-  const cx = clamp((e + half) / STEP_M, 0, GRID - 1.001);
-  const cy = clamp((half - n) / STEP_M, 0, GRID - 1.001);
+  const cx = clamp((e + half) / step, 0, g - 1.001);
+  const cy = clamp((half - n) / step, 0, g - 1.001);
   const x0 = Math.floor(cx);
   const y0 = Math.floor(cy);
   const fx = cx - x0;
   const fy = cy - y0;
-  const x1 = Math.min(x0 + 1, GRID - 1);
-  const y1 = Math.min(y0 + 1, GRID - 1);
+  const x1 = Math.min(x0 + 1, g - 1);
+  const y1 = Math.min(y0 + 1, g - 1);
   return (
-    grid[y0 * GRID + x0] * (1 - fx) * (1 - fy) +
-    grid[y0 * GRID + x1] * fx * (1 - fy) +
-    grid[y1 * GRID + x0] * (1 - fx) * fy +
-    grid[y1 * GRID + x1] * fx * fy
+    grid[y0 * g + x0] * (1 - fx) * (1 - fy) +
+    grid[y0 * g + x1] * fx * (1 - fy) +
+    grid[y1 * g + x0] * (1 - fx) * fy +
+    grid[y1 * g + x1] * fx * fy
   );
 }
 
@@ -200,16 +252,17 @@ export function bandColor(t) {
 // Memoise this per site: it does not depend on anything the user drags.
 export function contourBands(id, nBands = 12, DG = 120) {
   const grid = heightGrid(id);
+  const g = sideOf(grid);
   const site = SITES.find((s) => s.id === id) || SITES[0];
   const lo = site.min;
   const span = Math.max(site.max - site.min, 1);
 
   const band = new Uint8Array(DG * DG);
   for (let r = 0; r < DG; r++) {
-    const gr = Math.round((r * (GRID - 1)) / (DG - 1));
+    const gr = Math.round((r * (g - 1)) / (DG - 1));
     for (let c = 0; c < DG; c++) {
-      const gc = Math.round((c * (GRID - 1)) / (DG - 1));
-      band[r * DG + c] = clamp(Math.floor(((grid[gr * GRID + gc] - lo) / span) * nBands), 0, nBands - 1);
+      const gc = Math.round((c * (g - 1)) / (DG - 1));
+      band[r * DG + c] = clamp(Math.floor(((grid[gr * g + gc] - lo) / span) * nBands), 0, nBands - 1);
     }
   }
 

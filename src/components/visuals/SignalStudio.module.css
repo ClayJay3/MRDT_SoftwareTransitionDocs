@@ -1,0 +1,484 @@
+/* The studio is a map with instruments floating on it, not a page with a map in
+   it. The ground fills the window; everything else is a card anchored to a
+   corner, over the top.
+
+   Every length is a multiple of --sl-u, which is driven off the viewport, so one
+   unit scales the whole thing — type, padding, cards and the drawings inside
+   them. Nothing here should be given a px size unless it is a hairline that must
+   not grow. */
+
+.studio {
+  /* 1 unit = 16 px at the 1440x900 this was drawn at, then tracking whichever
+     axis is tighter. A 4K panel at 1:1 gets the same design at 2.3x. */
+  --sl-u: clamp(0.88rem, min(1.111vw, 1.778vh), 3rem);
+  /* The two rails are given a width rather than taking one. Sizing them off
+     their contents let the widest thing in either — the range chart — decide
+     where the middle column started, which is how the top-centre toolbar ended
+     up nowhere near the centre. Capped against the viewport as well as the
+     unit, so the map always keeps a lane down the middle. */
+  --rail-l: min(calc(17.5 * var(--sl-u)), 24vw);
+  --rail-r: min(calc(56 * var(--sl-u)), 54vw);
+  --card: color-mix(in srgb, var(--ifm-background-surface-color) 88%, transparent);
+  position: relative;
+  height: calc(100vh - var(--ifm-navbar-height));
+  overflow: hidden;
+  background: var(--ifm-background-color);
+}
+
+/* --------------------------------------------------------------- the ground */
+
+.mapLayer { position: absolute; inset: 0; }
+.mapLayer > * { width: 100%; height: 100%; }
+
+.noMap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(0.4 * var(--sl-u));
+  height: 100%;
+  padding: calc(2 * var(--sl-u));
+  text-align: center;
+  color: var(--ifm-color-emphasis-600);
+  background:
+    repeating-linear-gradient(45deg,
+      var(--ifm-color-emphasis-100) 0 calc(1.5 * var(--sl-u)),
+      var(--ifm-background-color) calc(1.5 * var(--sl-u)) calc(3 * var(--sl-u)));
+}
+.noMap b { font-size: calc(1.1 * var(--sl-u)); color: var(--ifm-font-color-base); }
+.noMap span { max-width: 40ch; font-size: calc(0.82 * var(--sl-u)); line-height: 1.5; }
+
+/* ------------------------------------------------------------- the overlay */
+
+/* Four anchored regions with the middle left empty, so the map is never fully
+   covered and there is always somewhere to grab it.
+
+   Only the cards take the pointer, never the regions that hold them. A region
+   is a full-width, full-height box with cards sitting in one corner of it, so
+   giving the region itself `pointer-events: auto` handed it every drag that
+   landed in the empty two thirds — which is most of the map. The base marker
+   sitting in the blank space above the drawings was simply not reachable. */
+.shell {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: var(--rail-l) minmax(0, 1fr) var(--rail-r);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: calc(0.6 * var(--sl-u));
+  padding: calc(0.6 * var(--sl-u));
+  pointer-events: none;
+}
+.shell > * { min-width: 0; }
+.tc > *, .tr > *, .bl > *, .brRow > * { pointer-events: auto; }
+
+.tl {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  align-self: start;
+  /* The one region that keeps the pointer itself: the cards fill its width, so
+     it has no dead space, and it needs the events for its own scrollbar. */
+  pointer-events: auto;
+  width: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.35 * var(--sl-u));
+  padding-right: calc(0.15 * var(--sl-u));
+}
+.tc {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  justify-self: center;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: calc(0.35 * var(--sl-u));
+}
+.tr {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  align-self: start;
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: calc(0.5 * var(--sl-u));
+  max-height: 100%;
+}
+/* Equal shares of the rail rather than a fixed width each, so the three
+   readouts end flush with the drawings underneath them. */
+.tr > * { flex: 1 1 0; min-width: 0; }
+.bl {
+  grid-column: 1 / 3;
+  grid-row: 3;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(0.35 * var(--sl-u));
+  max-width: 100%;
+}
+.bl > * { max-width: 100%; }
+.br {
+  grid-column: 3;
+  grid-row: 2 / 4;
+  align-self: end;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.5 * var(--sl-u));
+}
+/* Two columns the whole rail wide, so the wide drawings end flush with the
+   readouts above them. */
+.brRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: end;
+  gap: calc(0.5 * var(--sl-u));
+}
+/* The two square drawings keep their own size rather than a share of the rail,
+   so they are packed against the right edge instead of being spaced out across
+   it: the whole right-hand stack ends on one line. */
+.brRowTop {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+
+/* --------------------------------------------------------------- the cards */
+
+.box, .mapTools, .chart, .verdictBar {
+  border-radius: 10px;
+  box-shadow: 0 calc(0.25 * var(--sl-u)) calc(1.2 * var(--sl-u)) rgba(0, 0, 0, 0.32);
+}
+.box, .mapTools, .chart {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--card);
+  backdrop-filter: blur(calc(0.5 * var(--sl-u)));
+}
+
+/* A collapsed box is one line: what it is, and what it is set to. */
+.box { overflow: hidden; }
+.boxHead {
+  display: flex;
+  align-items: center;
+  gap: calc(0.35 * var(--sl-u));
+  padding: calc(0.35 * var(--sl-u)) calc(0.5 * var(--sl-u));
+  cursor: pointer;
+  list-style: none;
+  font-size: calc(0.78 * var(--sl-u));
+}
+.boxHead::-webkit-details-marker { display: none; }
+.boxHead:hover { background: var(--ifm-color-emphasis-100); }
+.boxMark {
+  width: 0;
+  height: 0;
+  flex-shrink: 0;
+  border-top: calc(0.26 * var(--sl-u)) solid transparent;
+  border-bottom: calc(0.26 * var(--sl-u)) solid transparent;
+  border-left: calc(0.4 * var(--sl-u)) solid var(--ifm-color-primary);
+  transition: transform 0.12s ease;
+}
+.box[open] .boxMark { transform: rotate(90deg); }
+.boxTitle {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: calc(0.7 * var(--sl-u));
+  color: var(--ifm-color-primary);
+  white-space: nowrap;
+}
+.boxBadge {
+  margin-left: auto;
+  font-size: calc(0.68 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.boxBody {
+  padding: calc(0.35 * var(--sl-u)) calc(0.5 * var(--sl-u)) calc(0.45 * var(--sl-u));
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+
+/* Wraps rather than running on: it shares the bottom of the window with the
+   drawings, and a nowrap row of chips and captions used to slide straight under
+   them and get painted over. */
+.mapTools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(0.2 * var(--sl-u));
+  padding: calc(0.3 * var(--sl-u)) calc(0.45 * var(--sl-u));
+}
+.toolGap { width: calc(0.4 * var(--sl-u)); }
+.scale {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.3 * var(--sl-u));
+  margin-left: calc(0.35 * var(--sl-u));
+  font-size: calc(0.66 * var(--sl-u));
+  color: var(--ifm-color-emphasis-700);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* No max-width: the bar is drawn at the true share of the window that its
+   label claims, so capping it would have made the label a lie the moment you
+   zoomed in. The length is kept sane by the step chosen in the page instead. */
+.scaleLine {
+  height: calc(0.32 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-700);
+  border-top: 0;
+}
+.mapHint {
+  margin-left: calc(0.35 * var(--sl-u));
+  font-size: calc(0.66 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+  white-space: nowrap;
+}
+
+.verdictBar {
+  margin: 0;
+  max-width: calc(46 * var(--sl-u));
+  backdrop-filter: blur(calc(0.5 * var(--sl-u)));
+}
+.verdictAdvice { font-weight: 400; font-size: 0.92em; color: var(--ifm-color-emphasis-800); }
+.verdictAdvice::before {
+  content: '·';
+  margin: 0 calc(0.4 * var(--sl-u));
+  color: var(--ifm-color-emphasis-500);
+}
+
+/* The wide drawings take the rail; the small square ones keep their own size
+   and centre over the drawing they sit above, since a square stretched to half
+   the rail would be taller than the window has to spare. */
+.chart { padding: calc(0.35 * var(--sl-u)); }
+.chartWide { width: 100%; }
+.chartSmall { width: min(calc(13 * var(--sl-u)), 100%); }
+
+/* ---------------------------------------------------------------- controls */
+
+.primaryBtn,
+.ghostBtn,
+.miniBtn,
+.select,
+.input {
+  font-family: inherit;
+  font-size: calc(0.76 * var(--sl-u));
+  border-radius: 7px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--card);
+  backdrop-filter: blur(calc(0.5 * var(--sl-u)));
+  color: var(--ifm-font-color-base);
+  padding: calc(0.3 * var(--sl-u)) calc(0.6 * var(--sl-u));
+  cursor: pointer;
+}
+.tc > .primaryBtn, .tc > .ghostBtn, .tc > .select {
+  box-shadow: 0 calc(0.25 * var(--sl-u)) calc(1.2 * var(--sl-u)) rgba(0, 0, 0, 0.32);
+}
+.primaryBtn {
+  font-weight: 700;
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  color: #fff;
+}
+.primaryBtn:hover { filter: brightness(1.08); }
+.primaryBtn:disabled { opacity: 0.5; cursor: default; filter: none; }
+.ghostBtn:hover, .select:hover { border-color: var(--ifm-color-primary); }
+.miniBtn {
+  font-size: calc(0.7 * var(--sl-u));
+  padding: calc(0.12 * var(--sl-u)) calc(0.45 * var(--sl-u));
+  border-radius: 999px;
+  backdrop-filter: none;
+  background: var(--ifm-background-color);
+}
+.miniBtn:hover { border-color: var(--ifm-color-primary); }
+.miniDanger:hover { border-color: #e06c75; color: #e06c75; }
+.linkBtn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ifm-color-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.select { cursor: pointer; max-width: 100%; }
+.tc > .select { width: min(calc(11 * var(--sl-u)), 100%); }
+.input {
+  cursor: text;
+  width: 100%;
+  backdrop-filter: none;
+  background: var(--ifm-background-surface-color);
+}
+textarea.input { font-family: var(--ifm-font-family-monospace); font-size: calc(0.72 * var(--sl-u)); resize: vertical; }
+
+/* ------------------------------------------------------------- gear slots */
+
+.slot { margin-bottom: calc(0.4 * var(--sl-u)); }
+.slotTop { display: flex; align-items: baseline; justify-content: space-between; gap: calc(0.4 * var(--sl-u)); }
+.slotLbl { font-size: calc(0.74 * var(--sl-u)); font-weight: 600; }
+.slotSave {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: calc(0.66 * var(--sl-u));
+  color: var(--ifm-color-primary);
+  cursor: pointer;
+}
+.slot .select { width: 100%; margin-top: calc(0.1 * var(--sl-u)); }
+.slotSub {
+  display: block;
+  margin-top: calc(0.1 * var(--sl-u));
+  font-size: calc(0.66 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+  font-variant-numeric: tabular-nums;
+}
+.gearFoot {
+  margin: calc(0.4 * var(--sl-u)) 0 0;
+  font-size: calc(0.68 * var(--sl-u));
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-600);
+}
+.gearWarn {
+  margin: calc(0.35 * var(--sl-u)) 0 0;
+  font-size: calc(0.68 * var(--sl-u));
+  line-height: 1.4;
+  color: #e5a73c;
+}
+
+/* --------------------------------------------------------------- library */
+
+.libTabs { display: flex; flex-wrap: wrap; align-items: center; gap: calc(0.35 * var(--sl-u)); margin-bottom: calc(0.7 * var(--sl-u)); }
+.libSpacer { flex: 1 1 auto; }
+.tabBtn {
+  font-size: calc(0.8 * var(--sl-u));
+  font-weight: 600;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ifm-color-emphasis-700);
+  padding: calc(0.25 * var(--sl-u)) calc(0.5 * var(--sl-u));
+  cursor: pointer;
+}
+.tabBtn:hover { color: var(--ifm-font-color-base); }
+.tabOn { color: var(--ifm-color-primary); border-bottom-color: var(--ifm-color-primary); }
+
+.rows { list-style: none; margin: 0; padding: 0; }
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(0.4 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  padding: calc(0.45 * var(--sl-u)) calc(0.6 * var(--sl-u));
+  margin-bottom: calc(0.35 * var(--sl-u));
+  background: var(--ifm-background-color);
+}
+.rowOn { border-color: var(--ifm-color-primary); }
+.rowMain { flex: 1 1 calc(16.25 * var(--sl-u)); min-width: 0; }
+.rowName { display: block; font-size: calc(0.84 * var(--sl-u)); font-weight: 600; }
+.rowSub { display: block; font-size: calc(0.72 * var(--sl-u)); color: var(--ifm-color-emphasis-600); font-variant-numeric: tabular-nums; }
+.rowNote { display: block; margin-top: calc(0.15 * var(--sl-u)); font-size: calc(0.7 * var(--sl-u)); color: var(--ifm-color-emphasis-600); }
+.rowBtns { display: flex; flex-wrap: wrap; gap: calc(0.25 * var(--sl-u)); align-items: center; }
+.tag {
+  display: inline-block;
+  margin-left: calc(0.35 * var(--sl-u));
+  font-size: calc(0.6 * var(--sl-u));
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: calc(0.05 * var(--sl-u)) calc(0.4 * var(--sl-u));
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  vertical-align: 0.1em;
+}
+.tagOn { background: var(--ifm-color-primary); color: #fff; }
+.empty {
+  border: 1px dashed var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  padding: calc(0.7 * var(--sl-u));
+  font-size: calc(0.78 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+}
+
+.editor {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 8px;
+  padding: calc(0.7 * var(--sl-u)) calc(0.8 * var(--sl-u));
+  margin-bottom: calc(0.8 * var(--sl-u));
+  background: var(--ifm-background-color);
+}
+.field { display: block; margin-bottom: calc(0.55 * var(--sl-u)); }
+.fieldLbl { display: block; font-size: calc(0.75 * var(--sl-u)); font-weight: 600; margin-bottom: calc(0.15 * var(--sl-u)); }
+.fieldHint { display: block; margin-top: calc(0.15 * var(--sl-u)); font-size: calc(0.68 * var(--sl-u)); line-height: 1.4; color: var(--ifm-color-emphasis-600); }
+.formRow { display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); }
+.formRow > * { flex: 1 1 calc(9.375 * var(--sl-u)); min-width: 0; }
+.derived { margin: 0 0 calc(0.6 * var(--sl-u)); font-size: calc(0.72 * var(--sl-u)); line-height: 1.45; color: var(--ifm-color-emphasis-700); }
+.error { margin: 0 0 calc(0.5 * var(--sl-u)); font-size: calc(0.75 * var(--sl-u)); font-weight: 600; color: #e06c75; }
+.status {
+  margin: 0 0 calc(0.6 * var(--sl-u));
+  font-size: calc(0.75 * var(--sl-u));
+  color: var(--ifm-color-emphasis-700);
+  background: rgba(76, 175, 80, 0.14);
+  border-radius: 6px;
+  padding: calc(0.3 * var(--sl-u)) calc(0.5 * var(--sl-u));
+}
+.editorBtns { display: flex; flex-wrap: wrap; gap: calc(0.4 * var(--sl-u)); align-items: center; }
+
+.bandGrid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: calc(0.6 * var(--sl-u)); margin-bottom: calc(0.6 * var(--sl-u)); }
+.bandCard {
+  flex: 1 1 calc(15 * var(--sl-u));
+  min-width: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  padding: calc(0.5 * var(--sl-u)) calc(0.6 * var(--sl-u));
+}
+.bandOff { opacity: 0.62; }
+.bandHead { display: flex; align-items: center; gap: calc(0.4 * var(--sl-u)); font-size: calc(0.82 * var(--sl-u)); margin-bottom: calc(0.4 * var(--sl-u)); cursor: pointer; }
+.bandHead input { accent-color: var(--ifm-color-primary); }
+
+.saveRow { display: flex; flex-wrap: wrap; gap: calc(0.4 * var(--sl-u)); margin-bottom: calc(0.5 * var(--sl-u)); }
+.saveRow .input { flex: 1 1 calc(13.75 * var(--sl-u)); }
+
+.libFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: calc(0.4 * var(--sl-u));
+  margin-top: calc(0.8 * var(--sl-u));
+  padding-top: calc(0.6 * var(--sl-u));
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+.libNote { font-size: calc(0.7 * var(--sl-u)); color: var(--ifm-color-emphasis-600); }
+.ioBox { margin-top: calc(0.6 * var(--sl-u)); display: flex; flex-direction: column; gap: calc(0.4 * var(--sl-u)); }
+
+/* ----------------------------------------------------------- narrow view */
+
+/* No room to float anything over anything: the map becomes a picture at the top
+   and the instruments go back to being a column under it. The three readouts
+   need about this much width between them before they stop being readable, and
+   below it the floating layout has nowhere left to float. */
+@media (max-width: 1150px) {
+  .studio { height: auto; overflow: visible; }
+  .mapLayer { position: relative; height: 62vw; max-height: 70vh; }
+  .shell {
+    position: relative;
+    inset: auto;
+    display: flex;
+    flex-direction: column;
+    gap: calc(0.5 * var(--sl-u));
+    pointer-events: auto;
+  }
+  .tl, .tr, .br, .bl { width: auto; max-height: none; overflow: visible; }
+  .tr, .brRow { display: flex; flex-wrap: wrap; }
+  .tr > *, .chartWide, .chartSmall { width: 100%; }
+}

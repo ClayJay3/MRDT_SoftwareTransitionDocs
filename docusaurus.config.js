@@ -58,6 +58,7 @@ const config = {
         logo: {alt: 'MRDT rover swoosh', src: 'img/logo.svg', className: 'navbar-swoosh'},
         items: [
           {type: 'docSidebar', sidebarId: 'bible', position: 'left', label: 'Clayton\'s Old Testament'},
+          {to: '/signal-studio', label: 'Signal Studio', position: 'left'},
           {
             href: 'https://github.com/MissouriMRDT',
             label: 'GitHub Org',

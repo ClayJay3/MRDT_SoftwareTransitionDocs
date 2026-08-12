@@ -26,16 +26,24 @@ shim(join(src, 'components', 'visuals', 'terrainModel.js'), 'terrainModel.mjs', 
   s.replace("'../../data/terrain'", "'./terrain.mjs'"));
 shim(join(src, 'components', 'visuals', 'signalModel.js'), 'signalModel.mjs', (s) =>
   s.replace("'./terrainModel'", "'./terrainModel.mjs'"));
+shim(join(src, 'components', 'visuals', 'signalGear.js'), 'signalGear.mjs', (s) =>
+  s.replace("'./signalModel'", "'./signalModel.mjs'"));
 
 const M = await import(`file://${join(dir, 'signalModel.mjs')}`);
 const T = await import(`file://${join(dir, 'terrainModel.mjs')}`);
+const G = await import(`file://${join(dir, 'signalGear.mjs')}`);
 process.on('exit', () => rmSync(dir, {recursive: true, force: true}));
 
 const {solve, DEFAULTS, PRESETS, BANDS, WIDTHS, PHY20, SENS20, TX_BACKOFF,
        STREAMS, MAC_EFFICIENCY, VIDEO_FLOOR, CONTROL_FLOOR, CONDUCTED_MAX,
        SHADOW_SIGMA, REF_MHZ, fspl, fresnel, dirFromBeamwidth, omniVBeam,
        rolloff, knifeEdge, qFunc, availabilityOf, allowedEirp,
-       groundReflectionDb, clamp} = M;
+       groundReflectionDb, clamp, sweepRange, PHY_FAMILIES, DEFAULT_RADIO,
+       normalizeRadio, sensCurve, linkLimits, radioHasBand} = M;
+
+const {BUILTIN_RADIOS, BUILTIN_ANTENNAS, normalizeAntenna, normalizeRadioSpec,
+       applyBaseAntenna, applyRoverAntenna, baseMatches, roverMatches,
+       reconcileLink, antennaFromBase, exportGear, importGear} = G;
 
 // ------------------------------------------------------------------ runner
 
@@ -402,8 +410,14 @@ for (const s of T.SITES) {
   const g = T.heightGrid(s.id);
   let lo = Infinity, hi = -Infinity;
   for (const v of g) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
-  near(lo, s.min, 0.11, `${s.id}: decoded minimum matches manifest`);
-  near(hi, s.max, 0.11, `${s.id}: decoded maximum matches manifest`);
+  // min/max span BOTH grids, because they drive the colour ramp and the ramp
+  // must not restretch when the fine grid lands. So the coarse grid has to sit
+  // inside them, not equal them — it can miss a peak the fine grid resolves.
+  check(`${s.id}: decoded range sits inside the manifest range`,
+    lo >= s.min - 0.11 && hi <= s.max + 0.11, `${lo}..${hi} vs ${s.min}..${s.max}`);
+  check(`${s.id}: manifest range is not wildly wider than the coarse grid`,
+    lo - s.min < 12 && s.max - hi < 12, `${lo}..${hi} vs ${s.min}..${s.max}`);
+  check(`${s.id}: the bundled grid declares its own side length`, g.n === T.GRID);
   const half = T.SPAN_M / 2 - 1;
   const corners = [['NW', -half, half, g[0]], ['NE', half, half, g[T.GRID - 1]],
                    ['SW', -half, -half, g[(T.GRID - 1) * T.GRID]],
@@ -483,17 +497,40 @@ check('defaults are internally legal',
   DEFAULTS.roverTx <= BANDS[DEFAULTS.band].txMax);
 
 check('2.4 GHz does not offer 80 MHz', !BANDS['2.4'].widths.includes(80));
-check('band switch would clamp TX', BANDS['5.8'].txMax === 28 && BANDS['2.4'].txMax === 30);
+// MikroTik publishes 29 dBm on 2.4 and 28 on 5, both at the bottom rate.
+check('band switch would clamp TX', BANDS['5.8'].txMax === 28 && BANDS['2.4'].txMax === 29);
 
 check('the antenna is derated correctly onto 2.4 GHz',
   (() => {
-    const a = solve(P({band: '5.8', baseGain: 18, baseHBeam: 20, baseVBeam: 20}), 1000);
     const b = solve(P({band: '2.4', baseGain: 18, baseHBeam: 20, baseVBeam: 20}), 1000);
     const k = REF_MHZ / BANDS['2.4'].fMHz;
-    // The claim is a ceiling, so on 2.4 the implied gain is what binds.
-    const want = Math.min(18, a.impliedRef - 20 * Math.log10(k));
+    // A panel is two dimensions of aperture, so it gives up 20log10(k) off the
+    // gain it CLAIMS — not off the gain its beamwidths allow. The difference is
+    // the part's own efficiency, and efficiency does not evaporate on a band
+    // change: an antenna 2 dB under its own directivity stays 2 dB under it.
+    const want = 18 - 20 * Math.log10(k);
     return Math.abs(b.hBase - 20 * k) < 0.01 && Math.abs(b.baseGain - want) < 0.02;
-  })(), 'panel loses 20log10 of the wavelength ratio off its implied gain');
+  })(), 'panel loses 20log10 of the wavelength ratio off its claimed gain');
+
+check('a fake spec sheet is still caught by the beamwidth ceiling off-band',
+  (() => {
+    // Claimed 24 dBi from a 90x20 beam is 12.4 dB of fiction at 5.8. Off-band
+    // the shift alone would carry that fiction along; the ceiling must bind.
+    const b = solve(P({band: '2.4', baseGain: 24, baseHBeam: 90, baseVBeam: 20}), 1000);
+    return Math.abs(b.baseGain - b.impliedGain) < 1e-9 && b.baseGain < 24 - 7;
+  })());
+
+check('base and rover score the same omni identically',
+  (() => {
+    // The same 6.7 dBi element, once in each slot, on a band it was not quoted
+    // at. A base omni used to keep every dB of it, because its stand-in 120 deg
+    // azimuth put the directivity ceiling far out of reach.
+    const drop = 10 * Math.log10(REF_MHZ / BANDS['2.4'].fMHz);
+    const b = solve(P({band: '2.4', baseKind: 'omni', baseGain: 6.7, baseHBeam: 120,
+                       baseVBeam: omniVBeam(6.7), roverGain: 6.7}), 1000);
+    return Math.abs(b.baseGain - (6.7 - drop)) < 0.02 &&
+           Math.abs(b.baseGain - b.roverGain) < 0.02;
+  })(), 'a one-dimensional aperture loses 10log10 whichever end of the link it is on');
 
 check('the omni is derated by half that, being a one-dimensional aperture',
   (() => {
@@ -594,6 +631,359 @@ check('the ACK timeout penalty only bites past 300 m',
     return Math.abs(near300.up.capacity - ref.up.capacity) < 1e-9 &&
            far.up.capacity < farRef.up.capacity * 0.8;
   })());
+
+
+// ------------------------------------------------------- 9. radio configs
+
+section('9. user-defined radios and antennas');
+
+check('an unset radio is the NetMetal ax, bit for bit',
+  (() => {
+    for (const d of [200, 1000, 2400]) {
+      const a = solve(P(), d);
+      const b = solve(P({baseRadio: DEFAULT_RADIO, roverRadio: DEFAULT_RADIO}), d);
+      for (const k of ['up', 'down'])
+        if (Math.abs(a[k].capacity - b[k].capacity) > 1e-9 ||
+            Math.abs(a[k].linkMargin - b[k].linkMargin) > 1e-9) return false;
+    }
+    return true;
+  })(), 'the radio layer must not move the doc page by a single dB');
+
+check('the default radio carries the datasheet sensitivity curve on both bands',
+  (() => {
+    const r = normalizeRadio(DEFAULT_RADIO);
+    // MikroTik prints -96 at the bottom and -67 at MCS11 on 5 GHz, and the same
+    // -67 top rung on 2.4 with a slightly better floor. The 2.4 curve is
+    // therefore very slightly shallower, not the flat -1 dB offset once assumed.
+    const b24 = r.bands['2.4'].sens;
+    return r.bands['5.8'].sens.every((v, i) => Math.abs(v - SENS20[i]) < 1e-9) &&
+           Math.abs(b24[0] + 97) < 1e-9 &&
+           Math.abs(b24[b24.length - 1] + 67) < 1e-9 &&
+           b24.every((v, i) => i === 0 || v >= b24[i - 1] - 1e-9);
+  })());
+
+// --- the installation, not just the radio
+
+check('two chains only carry two streams if they are cross-polarised',
+  (() => {
+    const xpol = solve(P({roverXpol: true}), 1000);
+    const copol = solve(P({roverXpol: false}), 1000);
+    return xpol.streams === 2 && copol.streams === 1 &&
+           copol.streamLimit === 'polarization' && xpol.streamLimit === null;
+  })(), 'two vertical omnis on a rover mast see one channel, not two');
+
+check('a single-port antenna caps the link at one stream',
+  (() => {
+    const r = solve(P({roverChains: 1}), 1000);
+    return r.streams === 1 && r.chainCap === 1 && r.streamLimit === 'chains';
+  })());
+
+check('the installation cannot invent streams the radio does not have',
+  (() => {
+    const oneStream = {...DEFAULT_RADIO, id: 'x1', streams: 1};
+    const r = solve(P({baseRadio: oneStream, baseChains: 4, roverChains: 4}), 1000);
+    return r.streams === 1 && r.streamLimit === null;
+  })());
+
+check('halving the streams halves the PHY, not the margin',
+  (() => {
+    const two = solve(P(), 1000);
+    const one = solve(P({roverXpol: false}), 1000);
+    return Math.abs(one.up.linkMargin - two.up.linkMargin) < 1e-9 &&
+           Math.abs(one.up.rungs[5].phy * 2 - two.up.rungs[5].phy) < 1e-9;
+  })(), 'polarization costs you rate, not signal');
+
+// --- the wire behind the radio
+
+check('a Fast Ethernet port caps what the air can deliver',
+  (() => {
+    const m5 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m5');
+    const r = solve(reconcileLink(P({baseRadio: m5, roverRadio: m5, band: '5.8', width: 40})), 200);
+    // 100 Mbps of port, minus framing, is the ceiling however good the link is.
+    return r.ethCap === 94 && r.up.capacity <= 94 + 1e-9 && r.down.capacity <= 94 + 1e-9;
+  })());
+
+check('the slower of the two ports is the one that binds',
+  (() => {
+    const m5 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m5');
+    const mixed = solve(reconcileLink(P({baseRadio: m5, band: '5.8'})), 200);
+    return mixed.ethCap === 94;
+  })());
+
+check('a gigabit pair is never held back by its port at these rates',
+  (() => {
+    const r = solve(P({width: 80}), 100);
+    return !r.ethBound && r.up.capacity < r.ethCap;
+  })());
+
+// --- what the rules allow, not just what the radio tunes
+
+check('900 MHz offers the 8 MHz channel the rules require',
+  (() => {
+    const m9 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m900');
+    const lim = linkLimits(m9, m9);
+    const w = lim.widthsFor('0.9');
+    return w.includes(8) && WIDTHS[8].rate === 0.4 &&
+           Math.abs(WIDTHS[8].sens - 10 * Math.log10(8 / 20)) < 0.01;
+  })());
+
+check('narrowing to 8 MHz buys noise floor and costs rate',
+  (() => {
+    const m9 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m900');
+    const at = (w) => solve(P({baseRadio: m9, roverRadio: m9, band: '0.9', width: w,
+                               baseRefMHz: BANDS['0.9'].fMHz, roverRefMHz: BANDS['0.9'].fMHz}), 1000);
+    const a = at(8);
+    const b = at(20);
+    return a.up.linkMargin > b.up.linkMargin && a.up.rungs[0].phy < b.up.rungs[0].phy;
+  })());
+
+check('sensCurve honours both anchors and keeps the curve monotonic',
+  (() => {
+    const c = sensCurve('ax', -100, -60);
+    if (Math.abs(c[0] + 100) > 1e-9 || Math.abs(c[c.length - 1] + 60) > 1e-9) return false;
+    return c.every((v, i) => i === 0 || v >= c[i - 1] - 1e-9);
+  })());
+
+check('every built-in radio solves cleanly against every other one',
+  (() => {
+    for (const a of BUILTIN_RADIOS) {
+      for (const b of BUILTIN_RADIOS) {
+        const lim = linkLimits(a, b);
+        for (const band of lim.bands) {
+          const p = reconcileLink(P({baseRadio: a, roverRadio: b, band}));
+          const r = solve(p, 1000);
+          if (allFinite(r).length) return false;
+          if (!r.bandOk) return false;
+        }
+      }
+    }
+    return true;
+  })());
+
+check('a band neither radio has leaves the link dead but finite',
+  (() => {
+    const m2 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m2'); // 2.4 only
+    const r = solve(P({band: '5.8', baseRadio: m2, roverRadio: m2}), 1000);
+    return !r.bandOk && allFinite(r).length === 0 && !r.up.up && !r.down.up &&
+           r.up.capacity === 0;
+  })());
+
+check('the pair runs at the weaker end: streams and rate ladder',
+  (() => {
+    const oneStream = {...DEFAULT_RADIO, id: 'x1', streams: 1};
+    const r = solve(P({baseRadio: oneStream}), 1000);
+    const ref = solve(P(), 1000);
+    return r.streams === 1 && Math.abs(r.up.phy - ref.up.phy / 2) < 1e-9;
+  })());
+
+check('an 802.11n end truncates the ladder for both directions',
+  (() => {
+    const m2 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m2');
+    const r = solve(P({band: '2.4', baseRadio: m2}), 300);
+    return r.maxMcs === 7 && r.up.rungs.length === 8 && r.down.rungs.length === 8;
+  })());
+
+check('sensitivity follows the receiver, not the transmitter',
+  (() => {
+    // Make the base deaf. Only the rover-to-base direction should suffer.
+    const deaf = {...DEFAULT_RADIO, id: 'deaf',
+      bands: {...DEFAULT_RADIO.bands, '5.8': {...DEFAULT_RADIO.bands['5.8'], sens0: -76, sensTop: -47}}};
+    const r = solve(P({baseRadio: deaf}), 1000);
+    const ref = solve(P(), 1000);
+    return Math.abs(r.up.linkMargin - (ref.up.linkMargin - 20)) < 1e-6 &&
+           Math.abs(r.down.linkMargin - ref.down.linkMargin) < 1e-9;
+  })());
+
+check('a lower TX ceiling binds even with the slider pushed past it',
+  (() => {
+    const weak = {...DEFAULT_RADIO, id: 'weak',
+      bands: {...DEFAULT_RADIO.bands, '5.8': {...DEFAULT_RADIO.bands['5.8'], txMax: 18}}};
+    const r = solve(P({reg: 'off', baseTx: 28, baseRadio: weak}), 1000);
+    return r.down.tx <= 18 + 1e-9 && r.down.rungs.every((rg) => rg.tx <= 18 + 1e-9);
+  })());
+
+check('reconcileLink drags an illegal band, width and TX back into range',
+  (() => {
+    const m2 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m2'); // 2.4, no 80 MHz, 28 dBm
+    const p = reconcileLink(P({band: '5.8', width: 80, baseTx: 28, roverTx: 28,
+                               baseRadio: m2, roverRadio: m2}));
+    const lim = linkLimits(p.baseRadio, p.roverRadio);
+    return p.band === '2.4' && lim.widthsFor(p.band).includes(p.width) &&
+           p.baseTx <= 28 && p.roverTx <= 30;
+  })());
+
+check('normalizing junk never produces a radio that breaks solve',
+  (() => {
+    const junk = [null, {}, {family: 'nonsense', streams: 99, bands: {}},
+                  {bands: {'5.8': {txMax: 'x', widths: [7], sens0: -20, sensTop: -200}}}];
+    for (const j of junk) {
+      const spec = normalizeRadioSpec(j);
+      const r = solve(P({baseRadio: spec, roverRadio: spec}), 1000);
+      if (allFinite(r).length) return false;
+    }
+    return true;
+  })());
+
+check('an antenna round-trips through a slot without drifting',
+  (() => {
+    for (const a of BUILTIN_ANTENNAS) {
+      const ant = normalizeAntenna(a);
+      const p = {...DEFAULTS, ...applyBaseAntenna(ant)};
+      if (!baseMatches(p, ant)) return false;
+      const q = {...DEFAULTS, ...applyRoverAntenna(ant)};
+      if (!roverMatches(q, ant)) return false;
+    }
+    return true;
+  })());
+
+check('a slot edit is detected as drift, and re-saving clears it',
+  (() => {
+    const ant = normalizeAntenna(BUILTIN_ANTENNAS[0]);
+    const p = {...DEFAULTS, ...applyBaseAntenna(ant), baseGain: 21};
+    if (baseMatches(p, ant)) return false;
+    const saved = antennaFromBase(p, 'edited');
+    return baseMatches(p, saved) && Math.abs(saved.gain - 21) < 1e-9;
+  })());
+
+check('every built-in antenna survives normalisation unchanged',
+  (() => BUILTIN_ANTENNAS.every((a) => {
+    const n = normalizeAntenna(a);
+    return n.name === a.name && Math.abs(n.gain - a.gain) < 1e-9 &&
+           (a.kind === 'omni' ? n.hBeam === 360 : n.hBeam === a.hBeam);
+  }))());
+
+check('export then import returns the same gear, without clobbering ids',
+  (() => {
+    const mine = {antennas: [normalizeAntenna({name: 'mine', gain: 14, hBeam: 40, vBeam: 40})],
+                  radios: [], setups: []};
+    const merged = importGear(exportGear(mine), mine);
+    return merged.antennas.length === 2 && merged.antennas[0].id !== merged.antennas[1].id;
+  })());
+
+check('sweepRange agrees with solving each distance by hand',
+  (() => {
+    const p = P({site: 'off'});
+    const s = sweepRange(p);
+    return s.rows.every((row) => Math.abs(solve(p, row.d).up.capacity - row.up) < 1e-9);
+  })());
+
+// --------------------------------------- 10. 900 MHz, yagis and reference bands
+
+section('10. 900 MHz, yagis and reference bands');
+
+near(BANDS['0.9'].fMHz, 915, 1e-9, '900 MHz sits mid-ISM at 915');
+check('900 MHz has no 40 MHz channel to tune',
+  !BANDS['0.9'].widths.includes(40) && BANDS['0.9'].widths.includes(5),
+  '902-928 is 26 MHz wide in total');
+near(WIDTHS[5].rate, 0.25, 1e-9, '5 MHz carries a quarter of the 20 MHz rate');
+near(WIDTHS[5].sens, -6.02, 0.03, '5 MHz buys 6 dB of noise floor');
+
+// The point-to-point relief in 15.247(b)(3) names 2.4 and 5.8 and stops there.
+near(allowedEirp('ptmp', '0.9', 24), 36, 1e-9, 'Part 15 PtMP on 900 MHz pins EIRP at 36');
+near(allowedEirp('p2p', '0.9', 24), 36, 1e-9, '900 MHz gets no point-to-point relief');
+check('900 MHz p2p and ptmp agree at every gain',
+  [...Array(31)].every((_, g) =>
+    Math.abs(allowedEirp('p2p', '0.9', g) - allowedEirp('ptmp', '0.9', g)) < 1e-9));
+
+// An aperture loses two dimensions off its own band, an end-fire array one.
+const bandShift = (kind, band) => {
+  const at = solve(P({band, baseKind: kind, baseRefMHz: REF_MHZ,
+                      baseGain: 30, baseHBeam: 20, baseVBeam: 20}), 1000);
+  return at.baseGain;
+};
+check('a panel gives up 20log10 of the wavelength ratio on 2.4',
+  Math.abs((bandShift('sector', '5.8') - bandShift('sector', '2.4'))
+           - 20 * Math.log10(REF_MHZ / BANDS['2.4'].fMHz)) < 0.02);
+check('a yagi gives up only 10log10 of the same ratio',
+  Math.abs((bandShift('yagi', '5.8') - bandShift('yagi', '2.4'))
+           - 10 * Math.log10(REF_MHZ / BANDS['2.4'].fMHz)) < 0.02);
+check('a yagi beam broadens by the square root, keeping 41253/(H x V) true',
+  (() => {
+    const k = REF_MHZ / BANDS['2.4'].fMHz;
+    const r = solve(P({band: '2.4', baseKind: 'yagi', baseHBeam: 20, baseVBeam: 20}), 1000);
+    return Math.abs(r.hBase - 20 * Math.sqrt(k)) < 0.02 &&
+           Math.abs(r.vBase - 20 * Math.sqrt(k)) < 0.02 &&
+           Math.abs(r.impliedGain - dirFromBeamwidth(r.hBase, r.vBase)) < 1e-9;
+  })());
+check('an omni on the mast stays round in azimuth and pays it all in elevation',
+  (() => {
+    const k = REF_MHZ / BANDS['2.4'].fMHz;
+    const r = solve(P({band: '2.4', baseKind: 'omni', baseHBeam: 120, baseVBeam: 20}), 1000);
+    return Math.abs(r.hBase - 120) < 1e-9 && Math.abs(r.vBase - 20 * k) < 0.02;
+  })());
+
+check('a part quoted at the band it is running on is not scaled at all',
+  (() => {
+    const r = solve(P({band: '0.9', baseRefMHz: BANDS['0.9'].fMHz, baseKind: 'yagi',
+                       baseGain: 13, baseHBeam: 44, baseVBeam: 47,
+                       roverRefMHz: BANDS['0.9'].fMHz, roverGain: 3}), 1000);
+    return Math.abs(r.hBase - 44) < 1e-9 && Math.abs(r.vBase - 47) < 1e-9 &&
+           Math.abs(r.baseGain - 13) < 0.02 && Math.abs(r.roverGain - 3) < 1e-9;
+  })(), 'the whole point of a reference band');
+
+check('a 900 MHz yagi read as a 5.8 GHz part would be a different antenna',
+  (() => {
+    const asIs = solve(P({band: '0.9', baseRefMHz: BANDS['0.9'].fMHz, baseKind: 'yagi',
+                          baseGain: 13, baseHBeam: 44, baseVBeam: 47}), 1000);
+    const mislabelled = solve(P({band: '0.9', baseKind: 'yagi',
+                                 baseGain: 13, baseHBeam: 44, baseVBeam: 47}), 1000);
+    return asIs.baseGain - mislabelled.baseGain > 3;
+  })());
+
+check('absent kind and reference read as the 5.8 GHz panel they always were',
+  (() => {
+    const {baseKind, baseRefMHz, roverRefMHz, ...bare} = P({band: '2.4'});
+    const a = solve(bare, 1000);
+    const b = solve(P({band: '2.4'}), 1000);
+    return Math.abs(a.baseGain - b.baseGain) < 1e-12 &&
+           Math.abs(a.roverGain - b.roverGain) < 1e-12 &&
+           Math.abs(a.up.capacity - b.up.capacity) < 1e-12;
+  })(), 'every setup saved before parts carried a band must still solve the same');
+
+check('the gear layer hands the model the kind and the band it was quoted at',
+  (() => {
+    const yagi = BUILTIN_ANTENNAS.find((a) => a.id === 'yagi-900-13');
+    const applied = applyBaseAntenna(yagi);
+    return applied.baseKind === 'yagi' && applied.baseRefMHz === BANDS['0.9'].fMHz &&
+           roverMatches({...applyRoverAntenna(yagi)}, yagi);
+  })());
+
+check('a saved part round-trips its kind and band through the sliders',
+  (() => {
+    const yagi = normalizeAntenna(BUILTIN_ANTENNAS.find((a) => a.id === 'yagi-900-13'));
+    const back = antennaFromBase({...DEFAULTS, ...applyBaseAntenna(yagi)}, 'copy');
+    return back.kind === 'yagi' && back.ref === '0.9' &&
+           Math.abs(back.gain - yagi.gain) < 1e-9 && back.hBeam === yagi.hBeam;
+  })());
+
+check('every built-in antenna survives normalisation with its kind intact',
+  BUILTIN_ANTENNAS.every((a) => {
+    const n = normalizeAntenna(a);
+    return n.kind === (a.kind || 'sector') && n.ref === (a.ref || '5.8');
+  }));
+
+check('a 900 MHz pair solves cleanly end to end',
+  (() => {
+    const m900 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m900');
+    const lim = linkLimits(m900, m900);
+    if (lim.bands.length !== 1 || lim.bands[0] !== '0.9') return false;
+    const yagi = BUILTIN_ANTENNAS.find((a) => a.id === 'yagi-900-13');
+    const whip = BUILTIN_ANTENNAS.find((a) => a.id === 'rover-whip-900');
+    const p = reconcileLink(P({baseRadio: m900, roverRadio: m900, band: '0.9',
+                               ...applyBaseAntenna(yagi), ...applyRoverAntenna(whip)}));
+    const r = solve(p, 1000);
+    return !allFinite(r).length && r.bandOk && BANDS['0.9'].widths.includes(p.width) &&
+           r.up.capacity > 0 && r.down.capacity > 0;
+  })());
+
+check('900 MHz beats 5.8 GHz through a ridge, which is why anyone puts up with it',
+  (() => {
+    const ridge = {site: 'off', ridgeH: 12, ridgeD: 500, baseKind: 'yagi'};
+    const low = solve(P({...ridge, band: '0.9', baseRefMHz: BANDS['0.9'].fMHz,
+                         roverRefMHz: BANDS['0.9'].fMHz}), 1000);
+    const high = solve(P({...ridge, band: '5.8'}), 1000);
+    return low.obstruction < high.obstruction;
+  })(), 'longer wavelength diffracts over an edge more cheaply');
 
 // ------------------------------------------------------------------ done
 

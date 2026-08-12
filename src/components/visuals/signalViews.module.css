@@ -1,0 +1,511 @@
+.root {
+  --sl-accent: var(--ifm-color-primary);
+  /* Every length in this file is a multiple of --sl-u. Inside a doc column
+     that unit is just the document's own rem; the full-page studio overrides
+     it with a viewport-driven one and the whole lab rescales with it. */
+  --sl-u: 1rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  padding: calc(1 * var(--sl-u));
+  margin: calc(1.5 * var(--sl-u)) 0;
+  background: var(--ifm-background-surface-color);
+}
+
+.header { display: flex; align-items: center; justify-content: space-between; gap: calc(0.5 * var(--sl-u)); margin-bottom: calc(0.9 * var(--sl-u)); }
+.title { font-weight: 700; font-size: calc(0.95 * var(--sl-u)); }
+.infoBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.4 * var(--sl-u));
+  font-size: calc(0.78 * var(--sl-u));
+  font-weight: 600;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  padding: calc(0.2 * var(--sl-u)) calc(0.7 * var(--sl-u)) calc(0.2 * var(--sl-u)) calc(0.45 * var(--sl-u));
+  cursor: pointer;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  flex-shrink: 0;
+}
+.infoBtn:hover { border-color: var(--ifm-color-primary); }
+.infoMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(1.1 * var(--sl-u));
+  height: calc(1.1 * var(--sl-u));
+  border-radius: 50%;
+  background: var(--ifm-color-primary);
+  color: #fff;
+  font-style: italic;
+  font-weight: 700;
+  font-family: Georgia, serif;
+  font-size: calc(0.78 * var(--sl-u));
+}
+
+.info {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-left: 3px solid var(--ifm-color-primary);
+  border-radius: 8px;
+  background: var(--ifm-background-color);
+  padding: calc(0.8 * var(--sl-u)) calc(1 * var(--sl-u));
+  margin-bottom: calc(1 * var(--sl-u));
+  font-size: calc(0.86 * var(--sl-u));
+  line-height: 1.55;
+}
+.info h5 {
+  margin: calc(0.9 * var(--sl-u)) 0 calc(0.3 * var(--sl-u));
+  font-size: calc(0.82 * var(--sl-u));
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ifm-color-primary);
+}
+.info h5:first-child { margin-top: 0; }
+.info p { margin: 0 0 calc(0.5 * var(--sl-u)); }
+.info ul { margin: 0 0 calc(0.5 * var(--sl-u)); padding-left: calc(1.1 * var(--sl-u)); }
+.info li { margin-bottom: calc(0.2 * var(--sl-u)); }
+.info code { font-size: calc(0.8 * var(--sl-u)); }
+.infoFoot {
+  font-style: italic;
+  color: var(--ifm-color-emphasis-700);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding-top: calc(0.5 * var(--sl-u));
+}
+
+.scenarios { display: flex; flex-wrap: wrap; gap: calc(0.4 * var(--sl-u)); align-items: center; margin-bottom: calc(0.9 * var(--sl-u)); }
+.scenLbl { font-size: calc(0.8 * var(--sl-u)); font-weight: 700; color: var(--ifm-color-emphasis-700); }
+.scenBtn {
+  font-size: calc(0.78 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  padding: calc(0.25 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  cursor: pointer;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+}
+.scenBtn:hover { border-color: var(--ifm-color-primary); }
+
+/* ---------------------------------------------------------------- scenes */
+
+.scenes { display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); align-items: flex-start; }
+.sceneMain { flex: 3 1 calc(23.75 * var(--sl-u)); min-width: 0; }
+.sceneMain > * + * { margin-top: calc(0.7 * var(--sl-u)); }
+
+/* ------------------------------------------------------------------- map */
+
+.mapRow { display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); align-items: stretch; }
+.mapBox { flex: 0 1 calc(22.5 * var(--sl-u)); min-width: 0; }
+.mapInfo {
+  flex: 1 1 calc(11.875 * var(--sl-u));
+  min-width: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  padding: calc(0.55 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  background: var(--ifm-background-color);
+}
+.mapInfo h6 {
+  margin: 0;
+  font-size: calc(0.78 * var(--sl-u));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-primary);
+}
+.mapSub {
+  margin: calc(0.1 * var(--sl-u)) 0 calc(0.45 * var(--sl-u));
+  font-size: calc(0.72 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+}
+.mapAttr {
+  margin: calc(0.5 * var(--sl-u)) 0 0;
+  font-size: calc(0.66 * var(--sl-u));
+  line-height: 1.4;
+  color: var(--ifm-color-emphasis-600);
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+  padding-top: calc(0.4 * var(--sl-u));
+}
+
+/* Pointer dragging needs touch-action off or mobile scrolls instead of drags. */
+.map { touch-action: none; cursor: crosshair; user-select: none; background: var(--ifm-color-emphasis-200); border-radius: 8px; }
+/* Filling a window rather than sitting in a column: no corners, no gap. The
+   compound selector matters — the generic .svg rule sets height:auto further
+   down the file, which would otherwise force the box back to the viewBox's own
+   aspect and defeat the measurement. */
+.map.mapCover { border-radius: 0; width: 100%; height: 100%; cursor: grab; }
+/* The cursor is the only thing that says these can be picked up and moved. */
+.map .handle { cursor: move; }
+.map.mapGrabbing, .map.mapGrabbing * { cursor: grabbing; }
+
+.mapStage { position: relative; line-height: 0; }
+.mapLayers, .mapZoom { position: absolute; display: flex; gap: calc(0.2 * var(--sl-u)); }
+.mapLayers { top: calc(0.4 * var(--sl-u)); right: calc(0.4 * var(--sl-u)); }
+.mapZoom { bottom: calc(0.4 * var(--sl-u)); left: calc(0.4 * var(--sl-u)); flex-direction: column; }
+.mapChip {
+  font-size: calc(0.68 * var(--sl-u));
+  line-height: 1.5;
+  font-weight: 600;
+  min-width: calc(1.6 * var(--sl-u));
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 5px;
+  padding: calc(0.1 * var(--sl-u)) calc(0.4 * var(--sl-u));
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.86);
+  color: #111;
+}
+.mapChip:hover:not(:disabled) { background: #fff; }
+.mapChip:disabled { opacity: 0.4; cursor: default; }
+.mapChipOn { background: var(--ifm-color-primary); border-color: var(--ifm-color-primary); color: #fff; }
+.mapHint {
+  margin: calc(0.35 * var(--sl-u)) 0 0;
+  font-size: calc(0.66 * var(--sl-u));
+  line-height: 1.45;
+  color: var(--ifm-color-emphasis-600);
+}
+.mapLbl {
+  font-size: 26px;
+  font-family: var(--ifm-font-family-monospace);
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 3px;
+}
+
+.mapPrompt {
+  flex: 1 1 100%;
+  border: 1px dashed var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  padding: calc(0.8 * var(--sl-u)) calc(0.9 * var(--sl-u));
+  background: var(--ifm-background-color);
+  font-size: calc(0.8 * var(--sl-u));
+}
+.mapPrompt b { display: block; margin-bottom: calc(0.2 * var(--sl-u)); }
+.mapPrompt span { display: block; color: var(--ifm-color-emphasis-700); margin-bottom: calc(0.5 * var(--sl-u)); }
+.sceneSide { flex: 1 1 calc(12.5 * var(--sl-u)); display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); min-width: 0; }
+.sceneSide > * { flex: 1 1 calc(11.25 * var(--sl-u)); min-width: 0; }
+
+.svg { display: block; width: 100%; height: auto; }
+
+.sky { fill: var(--ifm-background-color); stroke: var(--ifm-color-emphasis-300); stroke-width: 1; }
+.ground { fill: var(--ifm-color-emphasis-200); stroke: var(--ifm-color-emphasis-400); stroke-width: 1; }
+.mast { stroke: var(--ifm-color-emphasis-600); stroke-width: 2.5; }
+.ruler { stroke: var(--ifm-color-emphasis-500); stroke-width: 1; stroke-dasharray: 2 3; }
+.ring { fill: none; stroke: var(--ifm-color-emphasis-300); stroke-width: 1; }
+.boresight { stroke: var(--ifm-color-emphasis-400); stroke-width: 1; stroke-dasharray: 3 3; }
+.axis { stroke: var(--ifm-color-emphasis-400); stroke-width: 1; }
+.cursor { stroke: var(--ifm-color-emphasis-600); stroke-width: 1; stroke-dasharray: 3 3; }
+.dot { fill: var(--ifm-color-emphasis-700); }
+
+.lbl, .lblC, .lblR {
+  font-size: 11px;
+  font-family: var(--ifm-font-family-monospace);
+  fill: var(--ifm-color-emphasis-800);
+}
+.lblC { text-anchor: middle; }
+.lblR { text-anchor: end; }
+.cap {
+  font-size: 10.5px;
+  font-family: var(--ifm-font-family-monospace);
+  fill: var(--ifm-color-emphasis-600);
+}
+
+/* ---------------------------------------------------------------- panels */
+
+.verdict {
+  margin: calc(0.8 * var(--sl-u)) 0 calc(0.7 * var(--sl-u));
+  font-size: calc(0.85 * var(--sl-u));
+  font-weight: 700;
+  padding: calc(0.45 * var(--sl-u)) calc(0.6 * var(--sl-u));
+  border-radius: 6px;
+}
+.verdict.ok { background: rgba(76, 175, 80, 0.15); }
+.verdict.warn { background: rgba(229, 167, 60, 0.18); }
+.verdict.bad { background: rgba(224, 108, 117, 0.18); }
+
+.panels { display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); margin-bottom: calc(0.9 * var(--sl-u)); }
+.panel {
+  flex: 1 1 calc(15 * var(--sl-u));
+  min-width: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-top: 3px solid var(--ifm-color-emphasis-400);
+  border-radius: 8px;
+  padding: calc(0.6 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  background: var(--ifm-background-color);
+}
+.panel.ok { border-top-color: #4caf50; }
+.panel.warn { border-top-color: #e5a73c; }
+.panel.bad { border-top-color: #e06c75; }
+.panel h5 { margin: 0 0 calc(0.4 * var(--sl-u)); font-size: calc(0.9 * var(--sl-u)); }
+.panel h5 small { font-weight: 400; color: var(--ifm-color-emphasis-600); }
+
+.kv { width: 100%; font-size: calc(0.78 * var(--sl-u)); border-collapse: collapse; display: table; }
+.kv td { padding: calc(0.14 * var(--sl-u)) 0; border: 0; vertical-align: top; }
+.kv td:first-child { color: var(--ifm-color-emphasis-600); white-space: nowrap; padding-right: calc(0.6 * var(--sl-u)); }
+.kv td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.kv tr { border: 0; background: transparent; }
+.dim { color: var(--ifm-color-emphasis-500); font-weight: 400; }
+.capTag { color: #e5a73c; font-size: calc(0.72 * var(--sl-u)); }
+
+.hintLine { font-size: calc(0.82 * var(--sl-u)); color: var(--ifm-color-emphasis-700); margin: calc(0.6 * var(--sl-u)) 0 calc(1 * var(--sl-u)); }
+
+/* -------------------------------------------------------------- controls */
+
+.controls { display: flex; flex-wrap: wrap; gap: calc(0.7 * var(--sl-u)); }
+.group {
+  flex: 1 1 calc(13.125 * var(--sl-u));
+  min-width: 0;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  padding: calc(0.6 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  background: var(--ifm-background-color);
+}
+.group h6 {
+  margin: 0 0 calc(0.5 * var(--sl-u));
+  font-size: calc(0.72 * var(--sl-u));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ifm-color-primary);
+}
+
+.ctl { display: block; margin-bottom: calc(0.6 * var(--sl-u)); font-size: calc(0.78 * var(--sl-u)); }
+.ctlOff { opacity: 0.45; }
+.ctlTop { display: flex; justify-content: space-between; gap: calc(0.5 * var(--sl-u)); margin-bottom: calc(0.1 * var(--sl-u)); }
+.ctlTop b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ctl input[type='range'] { width: 100%; accent-color: var(--ifm-color-primary); margin: 0; }
+.ctlHint {
+  display: block;
+  font-size: calc(0.68 * var(--sl-u));
+  color: var(--ifm-color-emphasis-600);
+  margin-top: calc(0.1 * var(--sl-u));
+}
+
+.pills { display: flex; flex-wrap: wrap; gap: calc(0.25 * var(--sl-u)); margin-top: calc(0.15 * var(--sl-u)); }
+.pill {
+  font-size: calc(0.72 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  padding: calc(0.12 * var(--sl-u)) calc(0.5 * var(--sl-u));
+  cursor: pointer;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+.pill:hover { border-color: var(--ifm-color-primary); }
+.pillOn {
+  background: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  color: #fff;
+  font-weight: 700;
+}
+
+.check { display: flex; align-items: center; gap: calc(0.4 * var(--sl-u)); font-size: calc(0.78 * var(--sl-u)); cursor: pointer; }
+.check input { accent-color: var(--ifm-color-primary); }
+
+/* --------------------------------------------------------------- overlay */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(1.2 * var(--sl-u));
+}
+.overlayBack { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.55); }
+.overlayCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(calc(47.5 * var(--sl-u)), 100%);
+  max-height: min(88vh, calc(56.25 * var(--sl-u)));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 12px;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+.overlayWide { width: min(calc(73.75 * var(--sl-u)), 100%); }
+.overlayHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: calc(1 * var(--sl-u));
+  padding: calc(0.8 * var(--sl-u)) calc(1 * var(--sl-u));
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+.overlayHead h4 { margin: 0; font-size: calc(1 * var(--sl-u)); }
+.overlayHead p { margin: calc(0.15 * var(--sl-u)) 0 0; font-size: calc(0.78 * var(--sl-u)); color: var(--ifm-color-emphasis-600); }
+.overlayClose {
+  flex-shrink: 0;
+  width: calc(1.9 * var(--sl-u));
+  height: calc(1.9 * var(--sl-u));
+  line-height: 1;
+  font-size: calc(1.2 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-color);
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+}
+.overlayClose:hover { border-color: var(--ifm-color-primary); }
+.overlayBody { overflow: auto; padding: calc(0.9 * var(--sl-u)) calc(1 * var(--sl-u)) calc(1.1 * var(--sl-u)); }
+/* The info sheet is already a bordered card on the doc page; inside the
+   overlay it is the whole sheet, so drop the second frame. */
+.overlayBody .info { border: 0; border-left: 0; padding: 0; margin: 0; background: none; }
+
+/* ----------------------------------------------------------------- dense */
+
+/* The doc page can afford to breathe: it scrolls, and the lab is one figure in
+   a long article. The studio cannot — it is one screen that has to hold a whole
+   bench — so it runs the same controls and panels tighter. Same widgets, same
+   numbers, less air. */
+.dense .group { padding: calc(0.4 * var(--sl-u)) calc(0.5 * var(--sl-u)); }
+.dense .group h6 { margin-bottom: calc(0.22 * var(--sl-u)); font-size: calc(0.68 * var(--sl-u)); }
+.dense .ctl { margin-bottom: calc(0.24 * var(--sl-u)); font-size: calc(0.72 * var(--sl-u)); }
+.dense .ctlTop { margin-bottom: 0; }
+.dense .ctlHint {
+  font-size: calc(0.6 * var(--sl-u));
+  line-height: 1.25;
+  margin-top: 0;
+}
+.dense .pills { gap: calc(0.2 * var(--sl-u)); margin-top: calc(0.05 * var(--sl-u)); }
+.dense .pill { font-size: calc(0.66 * var(--sl-u)); padding: calc(0.06 * var(--sl-u)) calc(0.42 * var(--sl-u)); }
+.dense .check { font-size: calc(0.72 * var(--sl-u)); }
+
+.dense .panel { padding: calc(0.4 * var(--sl-u)) calc(0.5 * var(--sl-u)); }
+.dense .panel h5 { font-size: calc(0.82 * var(--sl-u)); margin-bottom: calc(0.25 * var(--sl-u)); }
+.dense .kv { font-size: calc(0.72 * var(--sl-u)); }
+.dense .kv td { padding: calc(0.05 * var(--sl-u)) 0; }
+.dense .mapInfo { padding: calc(0.4 * var(--sl-u)) calc(0.5 * var(--sl-u)); }
+.dense .mapSub { margin-bottom: calc(0.3 * var(--sl-u)); }
+.dense .mapAttr { font-size: calc(0.57 * var(--sl-u)); line-height: 1.3; padding-top: calc(0.3 * var(--sl-u)); }
+
+/* SVG label text is in viewBox units, so it shrinks with the box the drawing is
+   rendered into. The studio's drawings sit in narrower boxes than the doc
+   page's, so their labels are set larger in user units to land at the same
+   apparent size on screen. */
+.dense .cap { font-size: 12px; }
+.dense .lbl, .dense .lblC, .dense .lblR { font-size: 12.5px; }
+.dense .mapHint { font-size: calc(0.62 * var(--sl-u)); line-height: 1.35; margin-top: calc(0.25 * var(--sl-u)); }
+.dense .hintLine { font-size: calc(0.72 * var(--sl-u)); margin: calc(0.35 * var(--sl-u)) 0 0; }
+
+/* ------------------------------------------------------- help and legends */
+
+.help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(0.92 * var(--sl-u));
+  height: calc(0.92 * var(--sl-u));
+  margin-left: calc(0.22 * var(--sl-u));
+  padding: 0;
+  flex-shrink: 0;
+  vertical-align: baseline;
+  font-family: var(--ifm-font-family-base);
+  font-size: calc(0.6 * var(--sl-u));
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid var(--ifm-color-emphasis-400);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ifm-color-emphasis-600);
+  cursor: help;
+}
+.help:hover, .help:focus-visible {
+  border-color: var(--ifm-color-primary);
+  background: var(--ifm-color-primary);
+  color: #fff;
+  outline: none;
+}
+
+/* Fixed rather than absolute: every one of these sits inside a scrolling rail
+   that would otherwise clip it. */
+.tip {
+  position: fixed;
+  z-index: 400;
+  transform: translate(-50%, 0);
+  width: calc(19 * var(--sl-u));
+  max-width: calc(100vw - 1.5rem);
+  padding: calc(0.5 * var(--sl-u)) calc(0.6 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.35);
+  font-size: calc(0.7 * var(--sl-u));
+  font-weight: 400;
+  line-height: 1.45;
+  color: var(--ifm-font-color-base);
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+}
+.tipAbove { transform: translate(-50%, -100%); }
+.tip b {
+  display: block;
+  margin-bottom: calc(0.15 * var(--sl-u));
+  color: var(--ifm-color-primary);
+}
+
+.figure { display: block; }
+.figNote {
+  margin: calc(0.3 * var(--sl-u)) 0 0;
+  font-size: calc(0.68 * var(--sl-u));
+  line-height: 1.35;
+  color: var(--ifm-color-emphasis-600);
+}
+.dense .figNote { font-size: calc(0.64 * var(--sl-u)); margin-top: calc(0.2 * var(--sl-u)); }
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(0.15 * var(--sl-u)) calc(0.7 * var(--sl-u));
+  list-style: none;
+  margin: calc(0.3 * var(--sl-u)) 0 0;
+  padding: 0;
+}
+.legend li {
+  display: flex;
+  align-items: center;
+  gap: calc(0.25 * var(--sl-u));
+  margin: 0;
+  font-size: calc(0.68 * var(--sl-u));
+  line-height: 1.3;
+  color: var(--ifm-color-emphasis-700);
+}
+.swatch { width: calc(1.35 * var(--sl-u)); height: calc(0.62 * var(--sl-u)); flex-shrink: 0; }
+
+/* Ties each panel to its curve in the range chart. */
+.dirDot {
+  display: inline-block;
+  width: calc(0.5 * var(--sl-u));
+  height: calc(0.5 * var(--sl-u));
+  border-radius: 50%;
+  margin-right: calc(0.3 * var(--sl-u));
+  vertical-align: baseline;
+}
+
+.dense .legend li { font-size: calc(0.64 * var(--sl-u)); }
+.dense .legend { gap: calc(0.1 * var(--sl-u)) calc(0.5 * var(--sl-u)); }
+
+
+/* ---------------------------------------------------------------- glass */
+
+/* Panels that float over the map rather than sitting on the page. Same cards,
+   but translucent enough to keep the ground readable underneath and blurred so
+   the numbers on top of it stay legible. */
+.glass .panel,
+.glass .mapInfo {
+  background: color-mix(in srgb, var(--ifm-background-surface-color) 88%, transparent);
+  backdrop-filter: blur(calc(0.5 * var(--sl-u)));
+  box-shadow: 0 calc(0.25 * var(--sl-u)) calc(1.2 * var(--sl-u)) rgba(0, 0, 0, 0.32);
+}
+/* Inside a box that already has a frame, the readout is just content. */
+.glass .mapInfo {
+  border: 0;
+  box-shadow: none;
+  background: none;
+  backdrop-filter: none;
+  padding: 0;
+  margin-top: calc(0.3 * var(--sl-u));
+}
+.glass .sky { fill: color-mix(in srgb, var(--ifm-background-color) 78%, transparent); }
+.glass .figure { line-height: 0; }
+.glass .legend { line-height: 1.3; }

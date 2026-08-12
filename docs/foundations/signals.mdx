@@ -71,13 +71,13 @@ The **NetMetal ac²** (the predecessor) and the **mANTBox 52 15s** (an otherwise
 
 The NetMetal ax puts **both radios on the same two RP-SMA connectors** via a diplexer. The MikroTik product page does not make this obvious, but the hardware consequence is strict. **Whatever antenna you choose must cover both bands, or you forfeit an entire radio.** This disqualifies standard Ubiquiti airMAX and MikroTik mANT sectors because they are strictly 5 GHz.
 
-The system requires **two RF paths per side**. Both must be dual-band and dual-polarized.
+The system requires **two RF paths per side**, and both must be dual-band. Whether they are also dual-*polarized* is a separate question with its own consequences — see the warning below.
 
 | Where | What | Qty | Why |
 |---|---|---|---|
 | Base | Dual-band dual-polarized panel, 2× N-female | 1 | one antenna handles two ports, both chains, and both bands |
 | Base | LMR-240 jumper, 2 ft, N-male to RP-SMA male | 2 | one per port, keep them as short as possible |
-| Rover | MikroTik HGO-antenna-OUT, RP-SMA male | 2 | 3.6 dBi at 2.4, 6.7 at 5, weatherproof, screws straight on |
+| Rover | MikroTik HGO-antenna-OUT, RP-SMA male | 2 | 3.6 dBi at 2.4, 6.7 at 5, weatherproof, screws straight on — but both vertical, so **one spatial stream** |
 | Rover | RP-SMA male to female extension pigtail, 12 in | 2 | moves the elements onto a mast and away from the metal chassis |
 
 The 900 MHz Rocket M900 keeps its yagi and its rover omnidirectional antennas. That system remains untouched.
@@ -85,10 +85,26 @@ The 900 MHz Rocket M900 keeps its yagi and its rover omnidirectional antennas. T
 :::tip[A dual-band antenna is not the same antenna on both bands]
 An aperture keeps its physical size, not its beamwidth. Moving from 5.8 GHz down to 2.4 GHz stretches every beamwidth by the wavelength ratio of **2.38×**. A panel has two dimensions of aperture and gives up `20log₁₀(2.38) ≈ 7.5 dB`; a vertical omni has only one and gives up `10log₁₀(2.38) ≈ 3.8 dB`. That is exactly why the rover omni is spec'd 6.7 dBi at 5 GHz and 3.6 dBi at 2.4.
 
-So the SignalPlus panel is an 18 dBi, 20°×20° sector on 5.8 GHz and roughly a **12.6 dBi, 48°×48°** sector on 2.4. Do not budget it as 18 dBi on both. The upside is that the wider 2.4 GHz beam is far more forgiving of a rover that has wandered off boresight, which is a sensible division of labour: 5.8 for rate inside the corridor, 2.4 for coverage outside it.
+So the SignalPlus panel is an 18 dBi, 20°×20° sector on 5.8 GHz and roughly a **10.5 dBi, 48°×48°** sector on 2.4. Do not budget it as 18 dBi on both. The upside is that the wider 2.4 GHz beam is far more forgiving of a rover that has wandered off boresight, which is a sensible division of labour: 5.8 for rate inside the corridor, 2.4 for coverage outside it.
+
+Take the 7.5 dB off the **claimed** gain, not off what the beamwidths allow. The gap between those two is the antenna's own efficiency, and efficiency does not evaporate on a band change: a panel sitting 2 dB under its own directivity at 5.8 GHz is still 2 dB under it at 2.4. Derating against the ceiling instead flatters exactly the honest, conservatively specified parts you should be buying.
 :::
 
-**The rover antennas must be deliberately low gain.** A high-gain omnidirectional antenna creates a signal shaped like a thin, flat donut. When the rover drives onto a steep incline, that donut tilts, and the base station drops entirely out of the signal path. On a 1 km link with 22° of vehicle pitch, a 9 dBi antenna lands **20 dB down its own pattern**, leaving the rover on -85 dBm and a weak MCS4. A 3 dBi element on the exact same link is only 1.7 dB off its peak, holding -72 dBm and MCS8.
+:::danger[Two RF ports is not two spatial streams]
+A 2×2 radio needs two antenna paths that see genuinely **different** channels. On a clean 1 km line of sight there is no multipath to tell two co-polarized elements apart, so the channel matrix is rank one and the second stream has nowhere to go. Polarization is the only thing that separates them.
+
+The BOM above buys **two HGO omnis** for the rover — two chains, both vertical. That is a 1×1 air link on the rover side, at half the PHY rate, no matter that both radios say 2×2 on the box. The base panel being dual-polarized does not rescue it; both ends have to be.
+
+This costs less than it sounds *here* — the mission needs 8 Mbps and even a single stream clears it by an order of magnitude — but it is worth knowing you are buying it, and worth checking before anyone concludes the link is underperforming on the bench. The fixes, in order of preference:
+
+1. A **dual-slant rover omni** (two polarizations in one radome). Usually a dB or two less gain than an HGO, and it buys the second stream back outright.
+2. Mount the **second HGO horizontally**. Ugly, mechanically awkward on a rover, and costs a polarization mismatch against a vertically-polarized base path — but free.
+3. **Accept 1×1** deliberately, and stop budgeting the rover uplink at 2× PHY.
+
+Confirm what the SignalPlus panel's two ports actually are before ordering. "2×2 MIMO" in a marketplace title means two connectors; it does not promise they are cross-polarized.
+:::
+
+**The rover antennas must be deliberately low gain.** A high-gain omnidirectional antenna creates a signal shaped like a thin, flat donut. When the rover drives onto a steep incline, that donut tilts, and the base station drops entirely out of the signal path. On a 1 km link with 22° of vehicle pitch, a 9 dBi antenna lands **20 dB down its own pattern**, leaving the rover on -79 dBm and MCS6. A 3 dBi element on the exact same link is only 1.7 dB off its peak, holding -70 dBm and MCS9.
 
 The smaller antenna performs **12 dB better** in this scenario because a 9 dBi beam is only 14° tall, while a 3 dBi one is 57°. A 22° pitch walks the base station completely out of the high-gain beam. Using pigtail extensions on the rover matters for the same reason. An antenna bolted directly to a metal chassis creates blind spots that no amount of base station gain can fix.
 
@@ -147,9 +163,19 @@ Rule 3.b.iii allows a third option: **steer the antenna.** A mechanized mount dr
 
 Drag the mast height slider on a clear path and watch the *ground bounce* line, not the Fresnel zone: 1 m of mast costs 11 dB against free space, 3 m costs 1.5, and 6 m is actually 3.6 dB **better** than free space. Nothing else on the page moves the budget that far. Then toggle the Part 15 EIRP cap to see the transmit side flatly refuse to improve with higher gain, and watch **link uptime** rather than the headline Mbps. Uptime is the bottom rung's availability — the fraction of the drive you have a link at all — and it is the number that actually fails. A link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades; that is normal and fine. Uptime falling below 100% is not. The scenario buttons represent common mistakes this page is designed to prevent.
 
-Then switch **Terrain** from *flat + ridge* to **MDRS** or **Rolla** and do the siting exercise properly. Those are real USGS heightmaps, 6 km square at 30 m resolution, over USGS orthoimagery at 3.75 m — so you can put the tripod on a specific rise, road or wash rather than a coloured blob. Drag the base station around, swing the handle to aim the sector, drag the rover to set its bearing and range, and zoom in to 8× when you need to be precise about where something sits. The *Both* layer tints the imagery by elevation if you want the contours back. At MDRS you can find headings from the same spot that swing between a clear path and 60 dB of diffraction — which is the entire argument for [siting the tripod carefully and asking for the 20 m exception](#mounting-and-cabling), made concrete.
+Then switch **Terrain** from *flat + ridge* to **MDRS** or **Rolla** and do the siting exercise properly. Those are real USGS heightmaps, 6 km square, over USGS orthoimagery — so you can put the tripod on a specific rise, road or wash rather than a coloured blob. Drag the base station around, swing the handle to aim the sector, drag the rover to set its bearing and range, and zoom in to 8× when you need to be precise about where something sits. Ctrl-scroll zooms here; on the full-page version the wheel does it on its own.
+
+Both layers get sharper as you go in. The elevation grid starts at 30 m so the page renders instantly, then swaps itself for 3DEP's native **11.7 m** as soon as the browser has fetched it — the path profile follows whichever is loaded, so the diffraction numbers get more honest rather than just the picture. The imagery starts at the baked 2.9 m and lays live USGS tiles over it down to **1.9 m**, which is where the National Map's coverage actually stops. The *Both* layer tints the imagery by elevation if you want the contours back. At MDRS you can find headings from the same spot that swing between a clear path and 60 dB of diffraction — which is the entire argument for [siting the tripod carefully and asking for the 20 m exception](#mounting-and-cabling), made concrete.
 
 <SignalLab />
+
+:::tip[There is a full-page version with a parts library]
+The same model runs at **[Signal Studio](/signal-studio)** with the whole window to itself, and it adds the thing this embed cannot: **you can define your own antennas and radios, save them, and put them back later.** Every part argued about on this page is already in it — the SignalPlus panel, the RadioLabs, the ALFA pair, the $790 L-com, both rover omnis, the NetMetal ax and the Rocket M2 and M5 we run today — so "what if we kept the Rockets" is two dropdowns rather than a rebuild.
+
+A radio there is a real object: PHY generation, spatial streams, per-band TX ceiling, channel widths, the Ethernet port behind it, and the two sensitivity numbers a datasheet actually prints. Both ends are specified separately, so a mismatched pair behaves like one — the ladder truncates to the shorter of the two, the streams drop to the weaker end, and sensitivity follows whichever radio is *listening*. Type in a quote before you buy it and see what it does to the link.
+
+An antenna is a real object too, and that is where the two specs a listing hides live: **how many RF ports it has and what polarizations they are**. Put a pair of vertical omnis on the rover and the studio will tell you the link is running one stream, not two. Put a 10/100 Rocket on either end and it will tell you the wire is the limit rather than the air. Both are conclusions you cannot reach from a link budget alone, and both change what you should buy. Saved gear lives in your browser and exports to a JSON file you can hand to someone else.
+:::
 
 ## Mounting and cabling
 
@@ -169,7 +195,9 @@ Throw away the cheap RG58 coax jumpers bundled with consumer antennas. RG58 lose
 
 **Mast height is your dominant variable, and rule 3.b.iv caps it at 3 m.** This is a hard constraint, not a design choice, and it costs you twice. The first Fresnel zone at 1 km requires 3.6 m of clearance at the midpoint on 5.8 GHz and 5.6 m on 2.4 GHz, so a 3 m mast cannot physically clear rolling ground. It also parks you right at the ground-reflection crossover: at 3 m the bounce costs 1.5 dB at 1 km, at 6 m it would *give* you 3.6 dB, and at 1 m it costs 11 dB. Every metre of mast you are allowed is worth more than any antenna on the market.
 
-Behind a real ridge the band ordering flips. On a clear 1 km path 5.8 GHz beats 2.4 by about 6 dB once you account for the panel losing 7.5 dB of gain on the lower band. Put an 8 m ridge in the path and 5.8 GHz pays **20.2 dB** of knife-edge diffraction against 2.4 GHz's **16.7 dB**, which is enough to hand the win back to 2.4 — MCS7 instead of MCS6. That 3.5 dB is real but modest, which is the point: the diffraction advantage only gets decisive as you go much lower in frequency, and that is exactly why 900 MHz remains a core part of the architecture rather than a legacy holdover.
+Behind a real ridge the band ordering nearly flips. On a clear 1 km path 5.8 GHz beats 2.4 by about **8 dB**, because the panel gives up its full 7.5 dB of aperture gain on the lower band and only gets 7.5 dB of free-space loss back for it. Put an 8 m ridge in the path and 5.8 GHz pays **20.2 dB** of knife-edge diffraction against 2.4 GHz's **16.7 dB** — and that 3.5 dB is very nearly the whole 8 dB gap, so the two bands land within a decibel of each other on the same MCS6.
+
+Read that as the point rather than the punchline: a ridge is worth 3.5 dB of band advantage, and 3.5 dB does not rescue a blocked path. The diffraction advantage only gets decisive as you go much lower in frequency, which is exactly why 900 MHz remains a core part of the architecture rather than a legacy holdover — and why a relay beats a band change.
 
 Siting the base station is the best lever you have. Normally, the antenna base is restricted to within 5 m of the C2 station. At MDRS structures, a judge may allow you to place it **up to 20 m away** to clear buried cables or blocking structures. Always ask for this exception. Moving the tripod 20 m onto a natural rise outperforms any hardware upgrade you can buy.
 
