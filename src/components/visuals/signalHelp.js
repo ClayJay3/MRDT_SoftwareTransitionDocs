@@ -359,7 +359,7 @@ export const HELP = {
   },
   cost: {
     title: 'What it costs',
-    text: 'Radios and antennas only, per side, at the quantity the build actually needs, so the rover buys two omnis, not one. Cables, mast, PoE and the router are not in here. The dollars-per-dB figure is the one that makes the argument: past a certain point you are paying a great deal of money for margin you already had.',
+    text: 'Radios and antennas only, both ends of the link added up, at the quantity each end actually needs, so the rover buys two omnis, not one. Cables, mast, PoE and the router are not in here. The dollars-per-dB figure is the one that makes the argument: past a certain point you are paying a great deal of money for margin you already had.',
   },
   compare: {
     title: 'A / B',

@@ -1708,7 +1708,7 @@ export function CostPanel({cost, r}) {
             </tr>
           ))}
           <tr>
-            <td><b>Per side</b></td>
+            <td><b>Link total</b></td>
             <td><b>${cost.total}</b></td>
           </tr>
         </tbody>
@@ -1716,7 +1716,7 @@ export function CostPanel({cost, r}) {
       <p className={styles.panelFoot}>
         {cost.unpriced > 0 && <>{cost.unpriced} unpriced, so this is a floor. </>}
         {perDb !== null && <><b>${d0(perDb)}</b> per dB of link margin. </>}
-        Radios and antennas only.
+        Radios and antennas only, both ends.
       </p>
     </div>
   );
@@ -1741,7 +1741,7 @@ const CMP_ROWS = [
    pick: (s) => (s.workableKm2 ?? null) === null ? null : s.workableKm2},
   // Lower is better here, and the arrow has to know that or a cheaper build
   // reads as a regression.
-  {k: 'cost', label: 'Cost per side', unit: '', dp: 0, prefix: '$', lowerBetter: true, pick: (s) => s.cost},
+  {k: 'cost', label: 'Link cost', unit: '', dp: 0, prefix: '$', lowerBetter: true, pick: (s) => s.cost},
 ];
 
 export function ComparePanel({a, b, onClear, onSwap}) {

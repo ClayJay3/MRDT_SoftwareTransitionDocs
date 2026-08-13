@@ -398,9 +398,11 @@ export const radioSummary = (r) => {
 // ------------------------------------------------------------------ money
 //
 // The page's central claim is that gain is the least important thing on a spec
-// sheet, and the cleanest way to make that argument is per dollar. Two radios
-// and one antenna set per side, priced per unit and multiplied by how many the
-// build actually needs. The rover buys two omnis, not one.
+// sheet, and the cleanest way to make that argument is per dollar. One radio
+// and one antenna set at each end, priced per unit and multiplied by how many
+// that end actually needs, so the rover buys two omnis, not one. The total is
+// the whole link, both ends, because that is what you actually write a check
+// for.
 //
 // An unpriced part contributes nothing and is counted, so the total can say it
 // is incomplete rather than quietly reading low.

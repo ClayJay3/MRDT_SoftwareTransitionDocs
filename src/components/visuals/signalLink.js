@@ -45,12 +45,27 @@ const b64 = {
 // the way out keeps the payload short and the round-trip exact.
 const tidy = (v) => (typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v);
 
-export function encodeBench(p, slots) {
+// Where the two ends are standing always travels, even when it matches the
+// baseline. Everything else on this bench is a number you can re-derive from
+// the rest of the link, but geometry is the one thing the other end cannot
+// guess: it merges what arrives onto ITS opening bench, and any position the
+// diff leaves out silently becomes that bench's position instead of yours.
+// Whoever opens the link is then looking at a base and a rover parked
+// somewhere you never put them, with every dB downstream computed off the
+// wrong path. Five keys is a cheap price for the link meaning what it says.
+export const GEOMETRY_KEYS = ['site', 'baseE', 'baseN', 'aim', 'heading'];
+
+// `base` is the bench the other end will merge this onto, and it MUST be the
+// same object the reader starts from or the diff is against the wrong thing.
+// The studio opens on a site rather than on the model's bare defaults, so it
+// passes its own; the parameter exists so those two can never drift apart
+// again.
+export function encodeBench(p, slots, base = DEFAULTS) {
   const diff = {};
   for (const [k, v] of Object.entries(p)) {
     // Radios are objects; they travel as the slot ids below instead.
     if (k === 'baseRadio' || k === 'roverRadio') continue;
-    if (tidy(v) !== tidy(DEFAULTS[k])) diff[k] = tidy(v);
+    if (GEOMETRY_KEYS.includes(k) || tidy(v) !== tidy(base[k])) diff[k] = tidy(v);
   }
   return b64.encode(JSON.stringify({v: LINK_VERSION, p: diff, s: slots || undefined}));
 }
@@ -85,17 +100,17 @@ export function benchFromLocation() {
   return decodeBench(token);
 }
 
-export function benchUrl(p, slots) {
+export function benchUrl(p, slots, base) {
   if (typeof window === 'undefined') return '';
   const u = new URL(window.location.href);
-  u.searchParams.set(LINK_PARAM, encodeBench(p, slots));
+  u.searchParams.set(LINK_PARAM, encodeBench(p, slots, base));
   u.hash = '';
   return u.toString();
 }
 
 // Keep the address bar in step without pushing history: dragging a slider must
 // not fill the back button with a hundred entries.
-export function syncLocation(p, slots) {
+export function syncLocation(p, slots, base) {
   if (typeof window === 'undefined' || !window.history?.replaceState) return;
-  window.history.replaceState(null, '', benchUrl(p, slots));
+  window.history.replaceState(null, '', benchUrl(p, slots, base));
 }

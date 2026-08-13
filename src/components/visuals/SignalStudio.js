@@ -78,7 +78,7 @@ import {
   reconcileLink,
   roverMatches,
 } from './signalGear';
-import {benchFromLocation, benchUrl, syncLocation} from './signalLink';
+import {benchFromLocation, benchUrl, syncLocation, GEOMETRY_KEYS} from './signalLink';
 import {benchSource, normalizeBench} from '../../data/benches';
 import {EMPTY_LIBRARY, deleteItem, fetchLibrary, saveItem} from './gearApi';
 
@@ -447,11 +447,16 @@ export default function SignalStudio() {
   // differ from the defaults travel, for the same reason the share link only
   // carries differences: a diff of six values says what the bench is about,
   // and a dump of forty does not.
+  //
+  // Geometry is the exception, and for a sharper reason than payload size:
+  // loadBench re-homes to SITE_HOME on the way back in, so a position this diff
+  // left out does not come back as the default, it comes back as that site's
+  // home. Recording all five keys is what makes the round-trip mean anything.
   const paramsDiff = () => {
     const params = {};
     for (const [k, v] of Object.entries(p)) {
       if (k === 'baseRadio' || k === 'roverRadio') continue;
-      if (v !== STUDIO_DEFAULTS[k]) params[k] = v;
+      if (GEOMETRY_KEYS.includes(k) || v !== STUDIO_DEFAULTS[k]) params[k] = v;
     }
     return params;
   };
@@ -525,7 +530,7 @@ export default function SignalStudio() {
   const shareSig = useDebounced(`${JSON.stringify(p)}|${JSON.stringify(slots)}`, 400);
   useEffect(() => {
     if (!loaded.current) return;
-    syncLocation(p, slots);
+    syncLocation(p, slots, STUDIO_DEFAULTS);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shareSig]);
 
@@ -578,7 +583,7 @@ export default function SignalStudio() {
   const cmpA = pinned && {...pinned, workableKm2: coverage ? pinned.workableKm2 : null};
 
   const share = async () => {
-    const url = benchUrl(p, slots);
+    const url = benchUrl(p, slots, STUDIO_DEFAULTS);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -657,7 +662,7 @@ export default function SignalStudio() {
     {
       id: 'cost',
       label: 'What it costs',
-      badge: `$${cost.total} per side${
+      badge: `$${cost.total} total${
         r.linkMargin > 0 && cost.total > 0 ? ` · $${d0(cost.total / r.linkMargin)} per dB` : ''
       }`,
       body: <CostPanel cost={cost} r={r} />,
@@ -1032,7 +1037,19 @@ export default function SignalStudio() {
           onUseRadio={useRadio}
           onApplyBench={applyBench}
           onPreparePublish={preparePublish}
-          onBenchLink={(b) => benchUrl({...STUDIO_DEFAULTS, ...b.params}, {...DEFAULT_SLOTS, ...b.slots})}
+          onBenchLink={(b) => benchUrl(
+            // Same reconstruction applyBench does, SITE_HOME re-homing
+            // included, so linking a saved bench and opening it land on one
+            // position rather than two.
+            {
+              ...STUDIO_DEFAULTS,
+              ...(SITE_HOME[onGround(b.params.site)] || {}),
+              ...b.params,
+              site: onGround(b.params.site),
+            },
+            {...DEFAULT_SLOTS, ...b.slots},
+            STUDIO_DEFAULTS,
+          )}
           onPublish={publishCurrent}
           initial={lib}
           onClose={() => setLib(null)}
