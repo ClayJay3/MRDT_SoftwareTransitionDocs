@@ -56,6 +56,131 @@ services:
       - "traefik.http.services.mrdt-docs.loadbalancer.server.port=80"
       - "traefik.docker.network=proxy"
 
+  # The signal studio, and only the signal studio, without a login.
+  #
+  # This is a second build of the same project, not a second copy of the site:
+  # the docs plugin is off and everything it emits lives under /signal-studio/.
+  # That matters, because Docusaurus compiles doc prose into chunks under
+  # /assets/js/ and main.js maps every route to its chunk. Opening /assets/ so
+  # that a public studio page could load its own scripts would therefore hand
+  # over the bible as well. There is no doc content in this image at all, so the
+  # public rule below cannot be got subtly wrong.
+  #
+  # The docs image still contains its own /signal-studio page for `npm start`
+  # and for local use; in production this router outranks it on that path.
+  studio:
+    build:
+      context: .
+      target: studio
+      # Same host-network workaround as the site build above.
+      network: host
+    container_name: mrdt-studio
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # No authentik middleware. This is the public surface, and it is exactly
+      # one prefix wide. http → https is handled by the entrypoint redirect on
+      # the Traefik side, same as the gear router below.
+      - "traefik.http.routers.mrdt-studio-secure.entrypoints=https"
+      - "traefik.http.routers.mrdt-studio-secure.rule=Host(`docs.craysoftware.com`) && PathPrefix(`/signal-studio`)"
+      - "traefik.http.routers.mrdt-studio-secure.priority=200"
+      - "traefik.http.routers.mrdt-studio-secure.tls=true"
+      - "traefik.http.routers.mrdt-studio-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.mrdt-studio-secure.service=mrdt-studio"
+      - "traefik.http.services.mrdt-studio.loadbalancer.server.port=80"
+      - "traefik.docker.network=proxy"
+
+  # The one part of this site that is not static. The studio's gear library,
+  # meaning its antennas, radios and saved benches, has to be the same for
+  # everyone and writable by anyone on the team. nginx cannot write, so a small
+  # Node service stores the lot in a JSON file on a volume.
+  #
+  # It is deliberately mounted on the SAME hostname as the site, which buys two
+  # things: the browser treats it as same-origin so there is no CORS, and the
+  # session cookie the page already has goes along unasked.
+  #
+  # One service, two mounts, and which one answers decides who you are:
+  #
+  #   /api         behind authentik. A signed-in team member gets their name
+  #                attached by the auth layer on the way through, which is the
+  #                only thing that makes "you saved this, so you may change it"
+  #                enforceable.
+  #   /public-api  no login, because the studio is a public page now. Anyone can
+  #                read the library and add to it, always as `anonymous`.
+  #
+  # The studio tries both and keeps the better answer, so signing in still
+  # earns you your name on what you save.
+  gear:
+    build:
+      context: ./server/gear
+      # Same host-network workaround as the site build above; see the comment
+      # there for why, and remove both together.
+      network: host
+    container_name: mrdt-gear
+    restart: unless-stopped
+    environment:
+      - TZ=America/Chicago
+      # Set MODERATOR_TOKEN in a .env beside this file to be able to remove
+      # anyone's bench. Without it, people can still remove their own.
+      - MODERATOR_TOKEN=${MODERATOR_TOKEN:-}
+    volumes:
+      - ./gear-data:/data
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # More specific than the site's own rule, so Traefik matches it first.
+      # The explicit priority makes that a decision rather than a coincidence
+      # of how the two rule strings happen to compare.
+      - "traefik.http.routers.mrdt-gear-secure.entrypoints=https"
+      - "traefik.http.routers.mrdt-gear-secure.rule=Host(`docs.craysoftware.com`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.mrdt-gear-secure.priority=100"
+      - "traefik.http.routers.mrdt-gear-secure.tls=true"
+      - "traefik.http.routers.mrdt-gear-secure.tls.certresolver=cloudflare"
+      - "traefik.http.routers.mrdt-gear-secure.middlewares=authentik@file"
+      - "traefik.http.routers.mrdt-gear-secure.service=mrdt-gear"
+
+      # The public mount of the same service. Everything the studio can do
+      # without an account happens through here.
+      - "traefik.http.routers.mrdt-gear-public.entrypoints=https"
+      - "traefik.http.routers.mrdt-gear-public.rule=Host(`docs.craysoftware.com`) && PathPrefix(`/public-api`)"
+      - "traefik.http.routers.mrdt-gear-public.priority=200"
+      - "traefik.http.routers.mrdt-gear-public.tls=true"
+      - "traefik.http.routers.mrdt-gear-public.tls.certresolver=cloudflare"
+      - "traefik.http.routers.mrdt-gear-public.middlewares=mrdt-gear-anon,mrdt-gear-strip,mrdt-gear-rate"
+      - "traefik.http.routers.mrdt-gear-public.service=mrdt-gear"
+
+      # Nothing on this route may claim to be signed in. On the /api mount
+      # Traefik deletes these headers and re-sets them from authentik's answer,
+      # so a browser cannot forge one; on a route with no forward auth in front
+      # of it, whatever the client sent would sail straight through to a service
+      # that trusts it. Setting a request header to nothing removes it, so the
+      # service sees an anonymous caller no matter what was on the wire.
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-username="
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-groups="
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-email="
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-name="
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-uid="
+      - "traefik.http.middlewares.mrdt-gear-anon.headers.customrequestheaders.X-authentik-jwt="
+
+      # The service tolerates being called with or without the /api prefix, so
+      # taking /public-api off leaves a path it already understands.
+      - "traefik.http.middlewares.mrdt-gear-strip.stripprefix.prefixes=/public-api"
+
+      # A write endpoint with no login in front of it is a different animal from
+      # one behind Authentik. Per source IP as Traefik sees it, which behind a
+      # CDN is the edge rather than the visitor — coarse, but it is the
+      # difference between someone filling the library by hand and by script.
+      - "traefik.http.middlewares.mrdt-gear-rate.ratelimit.average=20"
+      - "traefik.http.middlewares.mrdt-gear-rate.ratelimit.burst=40"
+
+      - "traefik.http.services.mrdt-gear.loadbalancer.server.port=8080"
+      - "traefik.docker.network=proxy"
+
 networks:
   proxy:
     external: true

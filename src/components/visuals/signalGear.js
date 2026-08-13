@@ -3,10 +3,11 @@
 // page argues about, and the browser-side storage that lets you type in your
 // own and get them back next time.
 //
-// No React and no physics — the physics lives in signalModel.js and reads the
-// radio specs produced here. Kept pure and synchronous so the studio component
-// stays SSR safe; the only browser API is localStorage, and every entry point
-// that touches it checks for a window first.
+// No React and no physics. The physics lives in signalModel.js and reads the
+// radio specs produced here. The library itself lives on the gear service, see
+// gearApi.js; what is left in this file is the shapes, the normalizers and a
+// one-time read of the browser-local store that came before it. Kept pure and
+// synchronous so the studio component stays SSR safe.
 
 import {
   BANDS,
@@ -14,13 +15,9 @@ import {
   REF_MHZ,
   WIDTHS,
   clamp,
-  dirFromBeamwidth,
   linkLimits,
   omniVBeam,
 } from './signalModel';
-
-export const STORE_KEY = 'mrdt.signal-studio.gear.v1';
-export const STORE_VERSION = 1;
 
 // ------------------------------------------------------------- antennas
 //
@@ -31,7 +28,7 @@ export const STORE_VERSION = 1;
 //
 // `chains` and `pol` are what turn a 2x2 radio into a 2x2 link, and they are the
 // two specs a listing is most likely to leave you to infer. `chains` is how many
-// RF ports the part has — one connector is one chain, however many streams the
+// RF ports the part has. One connector is one chain, however many streams the
 // radio behind it has. `pol` is what those ports are: 'x' means the two ports
 // are cross-polarised (dual-slant, ±45°, or V+H) and see different channels; 'v'
 // means everything on this part is vertically polarised, so a second port is a
@@ -41,7 +38,7 @@ export const STORE_VERSION = 1;
 // A sector has two real beamwidths. An omni has one dimension of aperture, so
 // its elevation beamwidth follows from its gain and there is nothing to type:
 // 41253 / (gain x 360). A yagi has two beamwidths like a sector and differs
-// only in how it behaves off its own band — see BEAM_STRETCH.
+// only in how it behaves off its own band. See BEAM_STRETCH.
 //
 // `ref` matters as soon as a part is not a 5.8 GHz part. A 900 MHz yagi quoted
 // as though it were 5.8 GHz gear would be scaled down twice over and model a
@@ -61,6 +58,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.4,
     chains: 2,
     pol: 'x',
+    price: 80,
+    qty: 1,
     note: '~$80 marketplace listing, 2× N-female, never tested on a range. The build in the BOM.',
   },
   {
@@ -73,6 +72,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.4,
     chains: 2,
     pol: 'x',
+    price: 130,
+    qty: 1,
     note: 'Claims less than its beamwidth allows, which is the safe direction to be wrong in.',
   },
   {
@@ -83,10 +84,12 @@ export const BUILTIN_ANTENNAS = [
     hBeam: 66,
     vBeam: 16,
     feed: 0.4,
-    // Two separate panels, so you are free to mount one of them on its side —
-    // and if you do not, the pair is two copies of one channel.
+    // Two separate panels, so you are free to mount one of them on its side.
+    // If you do not, the pair is two copies of one channel.
     chains: 2,
     pol: 'x',
+    price: 45,
+    qty: 2,
     note: 'The cheap wide-beam option. ±649 m of lateral coverage at 1 km. Two panels, so mount the second one rotated 90° or the pair is single-polarised.',
   },
   {
@@ -99,6 +102,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.4,
     chains: 2,
     pol: 'x',
+    price: 790,
+    qty: 1,
     note: '$790 carrier-grade sector, dual-slant. A 7° elevation beam is what makes downtilt dangerous.',
   },
   {
@@ -111,6 +116,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.4,
     chains: 2,
     pol: 'x',
+    price: 35,
+    qty: 1,
     note: 'The spec sheet that does not survive D ≈ 41253 / (H × V). Derated on sight.',
   },
   {
@@ -123,10 +130,12 @@ export const BUILTIN_ANTENNAS = [
     vBeam: 47,
     feed: 0.5,
     // A yagi is one boom, one feed, one polarization. Two streams need two of
-    // them, crossed — which is a different part, not a second connector.
+    // them, crossed, which is a different part, not a second connector.
     chains: 1,
     pol: 'v',
-    note: 'A metre of boom for 13 dBi, single port. 900 MHz gets through brush that stops 5.8 dead — and Part 15 caps it at 36 dBm EIRP anyway, so the gain buys reach, not power.',
+    price: 60,
+    qty: 1,
+    note: 'A metre of boom for 13 dBi, single port. 900 MHz gets through brush that stops 5.8 dead, and Part 15 caps it at 36 dBm EIRP anyway, so the gain buys reach, not power.',
   },
   {
     id: 'yagi-2400-15',
@@ -139,6 +148,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.4,
     chains: 1,
     pol: 'v',
+    price: 40,
+    qty: 1,
     note: 'End-fire rather than aperture: it gives up 10log₁₀ off its own band where a panel gives up 20. One port, so one stream.',
   },
   {
@@ -147,10 +158,12 @@ export const BUILTIN_ANTENNAS = [
     kind: 'omni',
     gain: 6.7,
     feed: 0.3,
-    // The BOM buys two of these, one per RP-SMA port. That is two chains — and
+    // The BOM buys two of these, one per RP-SMA port. That is two chains, and
     // both of them vertical, which is the point the page has to make.
     chains: 2,
     pol: 'v',
+    price: 15,
+    qty: 2,
     note: 'The rover element in the BOM: 6.7 dBi at 5 GHz, 3.6 at 2.4, screws straight on. Two of them is two chains of the SAME polarization, so the link still runs one stream.',
   },
   {
@@ -161,6 +174,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.3,
     chains: 2,
     pol: 'x',
+    price: 45,
+    qty: 1,
     note: 'What a 2×2 rover actually needs: two polarizations in one radome. Costs 1.7 dB against the HGO pair and buys back the second spatial stream.',
   },
   {
@@ -172,6 +187,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.3,
     chains: 1,
     pol: 'v',
+    price: 12,
+    qty: 1,
     note: 'A half-wave at 915 MHz is 16 cm, so this is the one 900 MHz element that fits on a rover without becoming a mast.',
   },
   {
@@ -182,6 +199,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.3,
     chains: 1,
     pol: 'v',
+    price: 10,
+    qty: 2,
     note: 'A 57° tall toroid. Only 1.7 dB down at 22° of vehicle pitch.',
   },
   {
@@ -192,6 +211,8 @@ export const BUILTIN_ANTENNAS = [
     feed: 0.3,
     chains: 1,
     pol: 'v',
+    price: 18,
+    qty: 2,
     note: 'The tempting mistake: 14° tall, so 22° of pitch puts the base station 20 dB down.',
   },
 ];
@@ -214,6 +235,7 @@ export const BUILTIN_RADIOS = [
       '2.4': {txMax: 29, widths: [10, 20, 40], sens0: -97, sensTop: -67},
       '5.8': {txMax: 28, widths: [10, 20, 40, 80], sens0: -96, sensTop: -67},
     },
+    price: 169,
     note: 'L23UGSR-5HaxD2HaxD-NM, ~$169. Both bands concurrent on the same diplexed pair. Gigabit port plus a 2.5G SFP, so the wire is never the limit.',
   },
   {
@@ -224,6 +246,7 @@ export const BUILTIN_RADIOS = [
     backoffTop: 4,
     eth: 100,
     bands: {'2.4': {txMax: 28, widths: [5, 8, 10, 20, 40], sens0: -96, sensTop: -75}},
+    price: 89,
     note: 'What the rover runs today. 802.11n, 2.4 only, and a 10/100 port behind it.',
   },
   {
@@ -234,6 +257,7 @@ export const BUILTIN_RADIOS = [
     backoffTop: 4,
     eth: 100,
     bands: {'5.8': {txMax: 27, widths: [5, 8, 10, 20, 40], sens0: -96, sensTop: -75}},
+    price: 89,
     note: 'The 5.8 GHz half we shut down. 10/100 BASE-TX, which is the bottleneck that shut it down.',
   },
   {
@@ -244,6 +268,7 @@ export const BUILTIN_RADIOS = [
     backoffTop: 4,
     eth: 100,
     bands: {'0.9': {txMax: 28, widths: [5, 8, 10, 20], sens0: -96, sensTop: -75}},
+    price: 199,
     note: 'The M-series card for 902–928 MHz, 10/100 port. airOS offers 3/5/8/10/20 MHz; URC rule 3.b.v allows 8 and narrower, so 8 is the one to fly.',
   },
   {
@@ -257,7 +282,8 @@ export const BUILTIN_RADIOS = [
       '2.4': {txMax: 29, widths: [10, 20, 40], sens0: -97, sensTop: -71},
       '5.8': {txMax: 27, widths: [10, 20, 40, 80], sens0: -96, sensTop: -70},
     },
-    note: 'End of life. Here to show what the previous generation actually costs you.',
+    price: 149,
+    note: 'End of life. Here to show what the previous generation actually costs you. It is also on the older wireless package, so it will not station-bridge to an ax unit.',
   },
 ];
 
@@ -275,9 +301,9 @@ export function newId(prefix) {
   return `${prefix}-${stamp}${salt}`;
 }
 
-// Antennas arrive from three places — this file, localStorage and a pasted
-// JSON file — and only the first is trustworthy. Everything gets clamped into
-// a range the sliders can actually represent.
+// Antennas arrive from three places: this file, the gear service, and the old
+// browser-local store during migration. Only the first is trustworthy, so
+// everything gets clamped into a range the sliders can actually represent.
 export function normalizeAntenna(a) {
   const kind = ANTENNA_KINDS.includes(a?.kind) ? a.kind : 'sector';
   const gain = clamp(num(a?.gain, 12), -3, 30);
@@ -294,6 +320,10 @@ export function normalizeAntenna(a) {
     hBeam: kind === 'omni' ? 360 : clamp(num(a?.hBeam, 30), 3, 180),
     vBeam: kind === 'omni' ? omniVBeam(gain) : clamp(num(a?.vBeam, 30), 3, 120),
     feed: clamp(num(a?.feed, 0.4), 0, 25),
+    // USD, and 0 means "not priced" rather than "free". An unpriced part drops
+    // out of the build total instead of quietly making it look cheap.
+    price: clamp(num(a?.price, 0), 0, 100000),
+    qty: clamp(Math.round(num(a?.qty, 1)), 1, 8),
     chains,
     // A one-port antenna has nothing to cross with, so its polarization is a
     // single one whatever the listing was hoping to imply. Anything else that
@@ -335,6 +365,7 @@ export function normalizeRadioSpec(r) {
     streams: clamp(Math.round(num(r?.streams, 2)), 1, 4),
     backoffTop: clamp(num(r?.backoffTop, 8), 0, 20),
     eth: clamp(num(r?.eth, 1000), 1, 10000),
+    price: clamp(num(r?.price, 0), 0, 100000),
     bands,
     note: (r?.note || '').slice(0, 240),
   };
@@ -364,11 +395,58 @@ export const radioSummary = (r) => {
   return `${label} · ${r.streams}×${r.streams} · ${bands.length ? bands.join(' + ') : 'no band'} · ${eth} port`;
 };
 
-// Does the claimed gain survive D ≈ 41253 / (H° × V°)? Returns the ceiling the
-// beamwidths allow and how far over it the listing is.
-export function antennaCheck(a) {
-  const implied = a.kind === 'omni' ? a.gain : dirFromBeamwidth(a.hBeam, a.vBeam);
-  return {implied, over: a.gain - implied};
+// ------------------------------------------------------------------ money
+//
+// The page's central claim is that gain is the least important thing on a spec
+// sheet, and the cleanest way to make that argument is per dollar. Two radios
+// and one antenna set per side, priced per unit and multiplied by how many the
+// build actually needs. The rover buys two omnis, not one.
+//
+// An unpriced part contributes nothing and is counted, so the total can say it
+// is incomplete rather than quietly reading low.
+export function buildCost({baseAnt, roverAnt, baseRadio, roverRadio}) {
+  const items = [];
+  const add = (part, qty, what) => {
+    if (!part) return;
+    items.push({name: part.name, qty, each: part.price || 0, total: (part.price || 0) * qty, what});
+  };
+  add(baseRadio, 1, 'base radio');
+  add(roverRadio, 1, 'rover radio');
+  add(baseAnt, baseAnt?.qty ?? 1, 'base antenna');
+  add(roverAnt, roverAnt?.qty ?? 1, 'rover antenna');
+  const total = items.reduce((a, b) => a + b.total, 0);
+  const unpriced = items.filter((i) => i.each === 0).length;
+  return {items, total, unpriced};
+}
+
+// ------------------------------------------------------- exporting a profile
+//
+// The page tells you to cross-check this against SPLAT! or Radio Mobile before
+// trusting it at competition, which is only actionable if you can get the
+// profile out. Ground, line of sight and the Fresnel envelope, one row per
+// sample, in the units every other tool wants.
+export function profileCsv(r, p) {
+  if (!r.profile) return '';
+  const n = r.profile.length - 1;
+  const rows = [
+    '# MRDT signal studio path profile',
+    `# site,${p.site},base_e_m,${p.baseE},base_n_m,${p.baseN},heading_deg,${p.heading}`,
+    `# distance_m,${r.D},band_mhz,${(BANDS[p.band] || BANDS['5.8']).fMHz},base_agl_m,${p.baseH},rover_agl_m,${p.roverH}`,
+    'distance_m,ground_m,los_m,fresnel1_m,clearance_f1',
+  ];
+  for (let i = 0; i <= n; i++) {
+    const d1 = (i / n) * r.D;
+    const d2 = r.D - d1;
+    const ground = r.profile[i];
+    const los = r.baseZ + ((r.roverZ - r.baseZ) * i) / n;
+    const f1 = d1 > 0 && d2 > 0 ? Math.sqrt(((299.792458 / (BANDS[p.band] || BANDS['5.8']).fMHz) * d1 * d2) / r.D) : 0;
+    const clear = f1 > 0 ? (los - ground) / f1 : '';
+    rows.push(
+      [d1.toFixed(1), ground.toFixed(2), los.toFixed(2), f1.toFixed(2),
+       clear === '' ? '' : clear.toFixed(3)].join(','),
+    );
+  }
+  return rows.join('\n');
 }
 
 // ------------------------------------------------------ applying to a link
@@ -416,7 +494,7 @@ export function applyRoverAntenna(a) {
 }
 
 // True when the live sliders still match the part that was selected. Drift is
-// not an error — it is how you design a new part — but the studio has to say
+// not an error. It is how you design a new part, but the studio has to say
 // which of the two you are looking at.
 export function baseMatches(p, a) {
   const want = applyBaseAntenna(a);
@@ -426,7 +504,7 @@ export function baseMatches(p, a) {
     Math.abs(p.baseVBeam - want.baseVBeam) < 0.5 &&
     Math.abs(p.baseCable - want.baseCable) < 0.05 &&
     // Kind, reference band and the two RF-path specs are not on a slider, so
-    // they cannot drift on their own — but they can still be left behind by the
+    // they cannot drift on their own, but they can still be left behind by the
     // last part loaded, and a 900 MHz yagi wearing a panel's scaling is a
     // different antenna.
     (p.baseKind || 'sector') === want.baseKind &&
@@ -481,7 +559,7 @@ export const antennaFromRover = (p, name) =>
   });
 
 // Swapping a radio can invalidate the band, the channel width and both TX
-// power settings at once — an M2 has no 5 GHz to be on and no 80 MHz to tune.
+// power settings at once. An M2 has no 5 GHz to be on and no 80 MHz to tune.
 // Drag whatever is now illegal back into range rather than solving a link that
 // could not exist. TX power stops at the slider's own floor: a radio that
 // cannot reach the band at all is already dead in the model, and burying the
@@ -505,67 +583,84 @@ export function reconcileLink(p) {
 }
 
 // ---------------------------------------------------------------- storage
+//
+// The library lives on the server now, in the gear service, so that everyone on
+// the team sees the same antennas, radios and benches. See gearApi.js.
+//
+// What is left here is the old browser-local store, kept for exactly one
+// purpose: anyone who saved gear before the service existed still has it in
+// this browser, and it should not simply vanish. The studio offers to upload it
+// once and then stops asking.
 
-const EMPTY = {antennas: [], radios: [], setups: []};
+export const STORE_KEY = 'mrdt.signal-studio.gear.v1';
+export const MIGRATED_KEY = 'mrdt.signal-studio.gear.migrated.v1';
 
-// User gear only. The built-ins are code, not data, so they can be improved
-// later without every browser holding a stale copy of them.
-export function loadGear() {
-  if (typeof window === 'undefined') return {...EMPTY};
+// Whatever the old store holds, normalized and with the setups folded in as
+// benches. Setups were the private version of a published bench, so they are
+// the same thing and migrate straight across.
+export function legacyGear() {
+  if (typeof window === 'undefined') return null;
   try {
+    if (window.localStorage.getItem(MIGRATED_KEY)) return null;
     const raw = window.localStorage.getItem(STORE_KEY);
-    if (!raw) return {...EMPTY};
+    if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return {
-      antennas: (parsed.antennas || []).map(normalizeAntenna),
-      radios: (parsed.radios || []).map(normalizeRadioSpec),
-      setups: (parsed.setups || []).filter((s) => s && s.name && s.params),
-    };
+    const antennas = (parsed.antennas || []).map(normalizeAntenna);
+    const radios = (parsed.radios || []).map(normalizeRadioSpec);
+    const benches = (parsed.setups || [])
+      .filter((s) => s && s.name && s.params)
+      .map((s) => ({
+        name: s.name,
+        note: s.summary || '',
+        tags: [],
+        slots: s.slots || {},
+        params: s.params || {},
+      }));
+    if (!antennas.length && !radios.length && !benches.length) return null;
+    return {antennas, radios, benches};
   } catch {
-    // A corrupt or half-written entry should cost you your saved gear, not the
-    // page. Hand back an empty library and let the next save overwrite it.
-    return {...EMPTY};
+    return null;
   }
 }
 
-export function saveGear(gear) {
-  if (typeof window === 'undefined') return false;
+// Called once the upload has succeeded. The old data is left where it is rather
+// than deleted, because a migration that goes wrong should be recoverable by
+// hand, and it is a few kilobytes.
+export function markMigrated() {
+  if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(
-      STORE_KEY,
-      JSON.stringify({version: STORE_VERSION, ...gear}),
-    );
-    return true;
+    window.localStorage.setItem(MIGRATED_KEY, new Date().toISOString());
   } catch {
-    return false;
+    // Not being able to record it means being asked again, which is survivable.
   }
 }
 
-export const exportGear = (gear) =>
-  JSON.stringify({version: STORE_VERSION, kind: 'mrdt-signal-gear', ...gear}, null, 2);
+// A part as the service wants it: the shape above plus the name it is saved
+// under. The service adds the id, the author and the date.
+export const antennaPayload = (a) => ({
+  id: a.id && a.id.startsWith('ant-') ? undefined : a.id,
+  name: a.name,
+  note: a.note,
+  kind: a.kind,
+  ref: a.ref,
+  gain: a.gain,
+  hBeam: a.hBeam,
+  vBeam: a.vBeam,
+  feed: a.feed,
+  chains: a.chains,
+  pol: a.pol,
+  price: a.price,
+  qty: a.qty,
+});
 
-// Imported files are merged, never swapped in: a colleague's library should
-// add to yours. Ids that collide get a fresh one so nothing is overwritten.
-export function importGear(text, current) {
-  const parsed = JSON.parse(text);
-  const taken = new Set([
-    ...BUILTIN_ANTENNAS.map((a) => a.id),
-    ...BUILTIN_RADIOS.map((r) => r.id),
-    ...current.antennas.map((a) => a.id),
-    ...current.radios.map((r) => r.id),
-  ]);
-  const fresh = (item, prefix) => (taken.has(item.id) ? {...item, id: newId(prefix)} : item);
-
-  const antennas = (parsed.antennas || []).map((a) => fresh(normalizeAntenna(a), 'ant'));
-  const radios = (parsed.radios || []).map((r) => fresh(normalizeRadioSpec(r), 'radio'));
-  const setups = (parsed.setups || []).filter((s) => s && s.name && s.params);
-  if (!antennas.length && !radios.length && !setups.length) {
-    throw new Error('nothing importable in that file');
-  }
-  return {
-    antennas: [...current.antennas, ...antennas],
-    radios: [...current.radios, ...radios],
-    setups: [...current.setups, ...setups],
-    added: {antennas: antennas.length, radios: radios.length, setups: setups.length},
-  };
-}
+export const radioPayload = (r) => ({
+  id: r.id && r.id.startsWith('radio-') ? undefined : r.id,
+  name: r.name,
+  note: r.note,
+  family: r.family,
+  streams: r.streams,
+  backoffTop: r.backoffTop,
+  eth: r.eth,
+  price: r.price,
+  bands: r.bands,
+});

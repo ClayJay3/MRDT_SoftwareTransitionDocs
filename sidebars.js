@@ -52,7 +52,7 @@ const sidebars = {
     {
       type: 'category',
       label: 'Reference',
-      items: ['reference/board-table', 'reference/links', 'reference/glossary'],
+      items: ['reference/radio-links', 'reference/board-table', 'reference/links', 'reference/glossary'],
     },
   ],
 };

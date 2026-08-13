@@ -3,7 +3,7 @@
    corner, over the top.
 
    Every length is a multiple of --sl-u, which is driven off the viewport, so one
-   unit scales the whole thing — type, padding, cards and the drawings inside
+   unit scales the whole thing. Type, padding, cards and the drawings inside
    them. Nothing here should be given a px size unless it is a hairline that must
    not grow. */
 
@@ -12,7 +12,7 @@
      axis is tighter. A 4K panel at 1:1 gets the same design at 2.3x. */
   --sl-u: clamp(0.88rem, min(1.111vw, 1.778vh), 3rem);
   /* The two rails are given a width rather than taking one. Sizing them off
-     their contents let the widest thing in either — the range chart — decide
+     their contents let the widest thing in either. The range chart. Decide
      where the middle column started, which is how the top-centre toolbar ended
      up nowhere near the centre. Capped against the viewport as well as the
      unit, so the map always keeps a lane down the middle. */
@@ -30,24 +30,6 @@
 .mapLayer { position: absolute; inset: 0; }
 .mapLayer > * { width: 100%; height: 100%; }
 
-.noMap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: calc(0.4 * var(--sl-u));
-  height: 100%;
-  padding: calc(2 * var(--sl-u));
-  text-align: center;
-  color: var(--ifm-color-emphasis-600);
-  background:
-    repeating-linear-gradient(45deg,
-      var(--ifm-color-emphasis-100) 0 calc(1.5 * var(--sl-u)),
-      var(--ifm-background-color) calc(1.5 * var(--sl-u)) calc(3 * var(--sl-u)));
-}
-.noMap b { font-size: calc(1.1 * var(--sl-u)); color: var(--ifm-font-color-base); }
-.noMap span { max-width: 40ch; font-size: calc(0.82 * var(--sl-u)); line-height: 1.5; }
-
 /* ------------------------------------------------------------- the overlay */
 
 /* Four anchored regions with the middle left empty, so the map is never fully
@@ -56,7 +38,7 @@
    Only the cards take the pointer, never the regions that hold them. A region
    is a full-width, full-height box with cards sitting in one corner of it, so
    giving the region itself `pointer-events: auto` handed it every drag that
-   landed in the empty two thirds — which is most of the map. The base marker
+   landed in the empty two thirds, which is most of the map. The base marker
    sitting in the blank space above the drawings was simply not reachable. */
 .shell {
   position: absolute;
@@ -69,7 +51,11 @@
   pointer-events: none;
 }
 .shell > * { min-width: 0; }
-.tc > *, .tr > *, .bl > *, .brRow > * { pointer-events: auto; }
+/* Leaf cards only, never the boxes that arrange them. `pointer-events` is
+   inherited, so handing it to a container hands it to every gap, every empty
+   grid cell and every bit of slack inside it, and the rail is mostly slack.
+   `.budget` and `.br` are arrangements; `.analysis` is a card. */
+.tc > *, .budget > *, .bl > *, .brRow > *, .analysis { pointer-events: auto; }
 
 .tl {
   grid-column: 1;
@@ -98,19 +84,35 @@
   justify-content: center;
   gap: calc(0.35 * var(--sl-u));
 }
-.tr {
+/* The right-hand rail is ONE column, top to bottom: the readouts, the analysis
+   card, then the drawings pinned to the floor.
+
+   It used to be two independent regions stacked in the same grid column, one
+   anchored to the top and one to the bottom, overlapping in the middle row and
+   getting away with it only because neither was ever tall enough to reach the
+   other. That is not a layout, it is a coincidence, and the first card added
+   to the top one ended the coincidence. Two boxes that must not collide have to
+   be in the same flow, where the collision is arithmetic rather than luck. */
+.rr {
   grid-column: 3;
-  grid-row: 1 / 3;
-  align-self: start;
+  grid-row: 1 / 4;
   width: 100%;
+  min-height: 0;
   display: flex;
-  align-items: flex-start;
+  flex-direction: column;
   gap: calc(0.5 * var(--sl-u));
-  max-height: 100%;
 }
-/* Equal shares of the rail rather than a fixed width each, so the three
-   readouts end flush with the drawings underneath them. */
-.tr > * { flex: 1 1 0; min-width: 0; }
+
+/* Three equal readouts across the rail. A flex row was fine while there were
+   exactly three things; the moment there were more they each took a seventh of
+   the rail and every label in them started wrapping one character at a time.
+   Fixed columns cannot do that however much is put in them. */
+.budget {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: calc(0.5 * var(--sl-u));
+}
 .bl {
   grid-column: 1 / 3;
   grid-row: 3;
@@ -122,10 +124,16 @@
   max-width: 100%;
 }
 .bl > * { max-width: 100%; }
+/* Last in the rail and pushed to the floor by the auto margin, so whatever room
+   is left over lands between the analysis card and the drawings rather than
+   under them. */
+/* An author `display` beats the `hidden` attribute, whose only power is a UA
+   rule of the same name, so a flex container marked hidden stays on screen.
+   It has to be said explicitly or the drawings never yield the rail. */
+.br[hidden] { display: none; }
 .br {
-  grid-column: 3;
-  grid-row: 2 / 4;
-  align-self: end;
+  flex: 0 0 auto;
+  margin-top: auto;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -478,7 +486,134 @@ textarea.input { font-family: var(--ifm-font-family-monospace); font-size: calc(
     gap: calc(0.5 * var(--sl-u));
     pointer-events: auto;
   }
-  .tl, .tr, .br, .bl { width: auto; max-height: none; overflow: visible; }
-  .tr, .brRow { display: flex; flex-wrap: wrap; }
-  .tr > *, .chartWide, .chartSmall { width: 100%; }
+  .tl, .rr, .br, .bl { width: auto; max-height: none; overflow: visible; }
+  .budget, .brRow { display: flex; flex-wrap: wrap; }
+  .budget > *, .chartWide, .chartSmall { width: 100%; }
+  /* Stacked, there is no rail to run out of, so the analysis card stops
+     competing for height and simply shows what it has. */
+  .br { margin-top: 0; }
+  .analysisBody { max-height: none; }
+}
+
+/* A select small enough to live in the map toolbar next to the chips. Shares
+   the chip's own shape so the row still reads as one control strip. */
+.miniSelect {
+  font: inherit;
+  font-size: calc(0.68 * var(--sl-u));
+  padding: calc(0.1 * var(--sl-u)) calc(0.3 * var(--sl-u));
+  border-radius: calc(0.3 * var(--sl-u));
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+  color: inherit;
+  cursor: pointer;
+  max-width: calc(8 * var(--sl-u));
+}
+
+/* ------------------------------------------------- the analysis card
+
+   Four readouts that are worth having and not worth spending a third of the
+   rail on each. One card, one tab strip, and a body that scrolls inside itself
+   rather than growing until it reaches the drawings.
+
+   Closed it is a single bar carrying the headline of whichever tab is showing,
+   so it is still telling you something while it is out of the way. */
+/* The one card in the rail that is allowed to shrink. Everything else there has
+   a size it needs; this has a size it would like, so it takes the room that is
+   going and scrolls the rest. The min-height: 0 at every level is what lets a
+   flex child actually shrink below its content, without it the chain silently
+   refuses and the card grows through the drawings underneath. */
+.analysis {
+  overflow: hidden;
+  flex: 0 0 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Open, it may take up to the whole rail, but only as much of it as it has
+   something to put there. Stretching to fill left a short tab sitting in a tall
+   empty panel; shrinking to fit shows the map instead, which is better company. */
+.analysis[open] { flex: 0 1 auto; }
+.analysis .boxBody {
+  padding: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: calc(0.2 * var(--sl-u));
+  padding: calc(0.3 * var(--sl-u)) calc(0.5 * var(--sl-u)) 0;
+}
+.tab {
+  font: inherit;
+  font-size: calc(0.7 * var(--sl-u));
+  padding: calc(0.15 * var(--sl-u)) calc(0.5 * var(--sl-u));
+  border-radius: calc(0.3 * var(--sl-u));
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ifm-color-emphasis-700);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tab:hover { background: var(--ifm-color-emphasis-200); }
+.tabOn {
+  background: var(--ifm-color-emphasis-200);
+  border-color: var(--ifm-color-emphasis-400);
+  color: var(--ifm-font-color-base);
+  font-weight: 600;
+}
+
+/* Takes what the rail has spare and scrolls the rest, rather than declaring a
+   height and hoping it fits. The cap is a ceiling for the roomy case, not the
+   mechanism, on a short window the flex chain above brings it in well under. */
+/* A visible scrollbar, not an overlay one. The body is bounded by whatever the
+   rail has spare, so on a short window there IS more below, and an overlay
+   scrollbar that only appears once you are already scrolling tells you that
+   after you needed to know it. A thin persistent track is the affordance. */
+.analysisBody::-webkit-scrollbar { width: calc(0.35 * var(--sl-u)); }
+.analysisBody::-webkit-scrollbar-track { background: transparent; }
+.analysisBody::-webkit-scrollbar-thumb {
+  background: var(--ifm-color-emphasis-400);
+  border-radius: calc(0.2 * var(--sl-u));
+}
+.analysisBody {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ifm-color-emphasis-400) transparent;
+  /* No min or max any more. Open, the card owns the rail below the readouts, so
+     the room it has IS the room there is. Every tab fits, and the scroll is
+     there for a window too short to hold the longest one rather than as the
+     normal way of reading them. */
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(0.35 * var(--sl-u)) calc(0.5 * var(--sl-u)) calc(0.45 * var(--sl-u));
+}
+/* Inside the card the panel is the content, so it drops its own frame. */
+.analysisBody > * {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+/* Marks where a bench came from. A published one is anyone's and can vanish; a
+   built-in one was reviewed into the repo and will be there next year. Worth
+   one word of distinction in the list. */
+.rowTag {
+  margin-left: calc(0.4 * var(--sl-u));
+  padding: 0 calc(0.3 * var(--sl-u));
+  border-radius: calc(0.25 * var(--sl-u));
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-700);
+  font-size: calc(0.6 * var(--sl-u));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
 }

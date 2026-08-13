@@ -20,20 +20,32 @@ export {FINE_GRID, GRID, SPAN_M, STEP_M, SITES, gridIsFine, heightGrid};
 // is holding the bundled 200x200 or the fetched 512x512.
 const sideOf = (grid) => grid.n || GRID;
 
+// Short labels for the site pickers. Both the doc-page embed and the studio
+// draw one, and both used to hardcode their own list, which is how a third site
+// ended up labelled as the second one. Unknown ids fall back to the full name
+// rather than to whatever the last entry happened to be.
+export const SITE_LABEL = {
+  mdrs: 'MDRS',
+  rolla: 'Rolla',
+  tucumcari: 'Tucumcari',
+};
+export const siteLabel = (id) =>
+  SITE_LABEL[id] || (SITES.find((s) => s.id === id) || {}).name || id;
+
 // ------------------------------------------------------- fetching the fine grid
 //
 // The bundled grid is 30 m a sample, which is coarser than the 3DEP data it came
 // from and coarse enough to miss the small rises that decide whether a path
 // clears. The finer one is a plain int16 file under static/, so it is fetched
 // once per site, cached by the browser like any other asset, and installed
-// underneath a model that stays entirely synchronous — solve() keeps calling
+// underneath a model that stays entirely synchronous. Solve() keeps calling
 // heightGrid() and simply starts getting better ground back.
 //
 // Failure is not an error condition: no network, a 404, a truncated read all
 // leave the coarse grid in place and the page working.
 
 // `url` is the site's `fine` path already run through Docusaurus' baseUrl, which
-// only a component can do — so the caller supplies it rather than this module
+// only a component can do, so the caller supplies it rather than this module
 // guessing where the site is mounted.
 const pending = new Map();
 

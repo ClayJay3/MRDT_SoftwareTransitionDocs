@@ -31,7 +31,7 @@ import {
 // that band is 5.8 GHz. Everything else scales off whatever it was quoted at.
 export const REF_MHZ = 5800;
 
-// The band itself is physics — only fMHz belongs to it. txMax and widths are
+// The band itself is physics. Only fMHz belongs to it. txMax and widths are
 // the DEFAULT radio's limits on that band, kept here because the doc-page lab
 // has no radio picker; anything with one reads them off the radio instead.
 //
@@ -45,17 +45,17 @@ export const BANDS = {
 
 // URC 2026 rule 3.b.v caps 900 MHz at 8 MHz channels, inside one of three
 // sub-bands. That is narrower than any radio on the market will let you tune, so
-// the model has to say which widths are legal rather than which are possible —
-// a 20 MHz 900 MHz link models fine and cannot be flown.
+// the model has to say which widths are legal rather than which are possible.
+// A 20 MHz 900 MHz link models fine and cannot be flown.
 export const RULE_MAX_WIDTH = {'0.9': 8};
 
 // How an antenna's numbers move when the link runs on a band other than the one
 // the part was specified at, as an exponent on the wavelength ratio, per plane.
 //
-// An aperture — panel, dish, sector — keeps its physical size rather than its
+// An aperture (panel, dish, sector) keeps its physical size rather than its
 // beamwidth, so both beamwidths scale with wavelength and the gain falls by
 // 20log₁₀ of the ratio. A yagi is an end-fire array whose gain follows boom
-// length in wavelengths, so it gives up only 10log₁₀ — and a beam that must
+// length in wavelengths, so it gives up only 10log₁₀, and a beam that must
 // still satisfy D ≈ 41253/(H × V) can therefore only broaden by the square root
 // of the ratio. A vertical omni is round in azimuth on every band it works on,
 // so all of its 10log₁₀ shows up in the elevation plane.
@@ -160,7 +160,7 @@ export const DEFAULT_RADIO = {
 // What a wired port lets past, as a fraction of its nominal rate. Framing,
 // preamble and the interframe gap are about 2% of Ethernet; TCP over it lands
 // near 94% of line rate. The number matters because a radio can be fast enough
-// on the air and still be a 94 Mbps radio — which is exactly the argument for
+// on the air and still be a 94 Mbps radio, which is exactly the argument for
 // retiring the Rockets, and the model was not making it.
 export const ETH_EFFICIENCY = 0.94;
 
@@ -179,7 +179,7 @@ export function sensCurve(family, sens0, sensTop) {
 }
 
 // Fill in whatever a spec left out and pre-compute the two curves, so solve()
-// can treat every radio — built in or typed in by hand — identically.
+// can treat every radio. Built in or typed in by hand. Identically.
 export function normalizeRadio(spec) {
   const s = spec || DEFAULT_RADIO;
   const family = PHY_FAMILIES[s.family] ? s.family : 'ax';
@@ -298,6 +298,17 @@ export function groundReflectionDb(D, h1, h2, fMHz, sigmaH = SURFACE_ROUGHNESS) 
 // Directivity from beamwidth. The number every antenna spec sheet has to obey.
 export const dirFromBeamwidth = (hDeg, vDeg) => 10 * log10(41253 / (hDeg * vDeg));
 
+// Coax loss is not a constant, it is a curve. Conductor loss goes as the square
+// root of frequency and dielectric loss goes linearly; over the decade from 900
+// MHz to 5.8 GHz the square-root term dominates, and every cable table agrees
+// with it to within a few percent. So a jumper quoted at the band its antenna
+// was quoted at is a different jumper on another band: the 0.4 dB LMR-240 that
+// feeds a 5.8 GHz panel is 0.16 dB in front of a 900 MHz yagi.
+//
+// Getting this wrong only ever cost the low bands, which are the ones being
+// argued for, so it was a thumb on the scale against 900 MHz.
+export const feedAt = (lossDb, refMHz, fMHz) => lossDb * Math.sqrt(fMHz / (refMHz || REF_MHZ));
+
 // Elevation beamwidth of a vertical omni, which is 360 degrees in azimuth.
 export const omniVBeam = (gainDbi) => clamp(41253 / (dbToLin(gainDbi) * 360), 3, 120);
 
@@ -316,7 +327,7 @@ export const knifeEdge = (h, d1, d2, fMHz) => {
 
 // How finely the real terrain is cut into a profile. Sampling much finer than
 // the heightmap only interpolates, and much coarser walks straight over the
-// small rises that decide whether a path clears — so the profile follows the
+// small rises that decide whether a path clears, so the profile follows the
 // grid that is actually loaded. 64 spans is the floor (16 m on a 1 km path,
 // which is what the bundled 30 m grid supports) and 192 the ceiling, past which
 // the Deygout search costs more than it resolves.
@@ -349,7 +360,7 @@ export const availabilityOf = (marginDb) => clamp(1 - qFunc(marginDb / SHADOW_SI
 // The point-to-point relief in §15.247(b)(3) is granted band by band, and it
 // names two: 5725–5850 MHz takes the gain for free, 2400–2483.5 MHz gives back
 // 1 dB per 3. 902–928 MHz is not on the list, so a 900 MHz link stays pinned at
-// 36 dBm however it is deployed — which is the whole argument against curing a
+// 36 dBm however it is deployed, which is the whole argument against curing a
 // 900 MHz path by bolting on a bigger yagi.
 export function allowedEirp(mode, band, gainDbi) {
   if (mode === 'off') return Infinity;
@@ -447,7 +458,7 @@ export function solve(p, distance) {
   const D = distance;
   const onMap = p.site !== 'off';
 
-  // Which radio sits at each end. Left unset — as the doc page leaves it — both
+  // Which radio sits at each end. Left unset, as the doc page leaves it. Both
   // ends are the NetMetal ax, and every number below is what it always was.
   const baseRadio = normalizeRadio(p.baseRadio);
   const roverRadio = normalizeRadio(p.roverRadio);
@@ -465,7 +476,7 @@ export function solve(p, distance) {
   // that means two polarizations: co-polar elements a few centimetres apart on
   // a rover mast see almost the same channel, the matrix is rank one, and the
   // second stream has nowhere to live. Buying a dual-chain radio and hanging
-  // one omni — or two vertical omnis — off it is the commonest way to pay for
+  // one omni, or two vertical omnis. Off it is the commonest way to pay for
   // a 2x2 link and fly a 1x1 one.
   //
   // Both are properties of what is bolted to the mast, so they come in with the
@@ -502,7 +513,7 @@ export function solve(p, distance) {
 
   // --- antenna gain actually pointed at the other end
   //
-  // The sliders describe the antenna at the band it was specified on — 5.8 GHz
+  // The sliders describe the antenna at the band it was specified on. 5.8 GHz
   // unless the part in the slot says otherwise, which is what lets a 900 MHz
   // yagi be typed in as the 900 MHz yagi it is rather than as the 5.8 GHz
   // antenna it would have to pretend to be.
@@ -523,8 +534,8 @@ export function solve(p, distance) {
   const impliedGain = dirFromBeamwidth(hBeam, vBeam);
 
   // Off its own band the part loses gain, and it loses it as a SHIFT, not as a
-  // ceiling. Efficiency — the gap between what the beamwidths allow and what
-  // the vendor claims — is a property of the metal and survives the band
+  // ceiling. Efficiency, the gap between what the beamwidths allow and what
+  // the vendor claims, is a property of the metal and survives the band
   // change, so an antenna quoted 2 dB under its own directivity is still 2 dB
   // under it a band down. Taking the minimum alone quietly handed that gap back
   // as free gain, which flattered every off-band link by exactly the amount the
@@ -546,7 +557,7 @@ export function solve(p, distance) {
   // One dimension of aperture, so gain falls by 10log10 of the ratio measured
   // from the band this element was quoted at. The toroid then widens by the
   // same ratio on its own through the identity below. This is the same law the
-  // base slot applies above — BEAM_STRETCH.omni sums to 1 — so the same part
+  // base slot applies above. BEAM_STRETCH.omni sums to 1, so the same part
   // scores the same on either end of the link.
   const kRover = (p.roverRefMHz || REF_MHZ) / band.fMHz;
   const roverGain = p.roverGain - 10 * log10(kRover);
@@ -635,17 +646,22 @@ export function solve(p, distance) {
     };
   }
 
+  // The jumpers, on the band this link is actually running rather than the band
+  // they were quoted at.
+  const baseCable = feedAt(p.baseCable, p.baseRefMHz, band.fMHz);
+  const roverCable = feedAt(p.roverCable, p.roverRefMHz, band.fMHz);
+
   const atBase = {radio: baseRadio, band: baseBand};
   const atRover = {radio: roverRadio, band: roverBand};
-  const down = direction(p.baseTx, p.baseCable, baseGain, baseEff, capBase, roverEff, p.roverCable, atBase, atRover);
-  const up = direction(p.roverTx, p.roverCable, roverGain, roverEff, capRover, baseEff, p.baseCable, atRover, atBase);
+  const down = direction(p.baseTx, baseCable, baseGain, baseEff, capBase, roverEff, roverCable, atBase, atRover);
+  const up = direction(p.roverTx, roverCable, roverGain, roverEff, capRover, baseEff, baseCable, atRover, atBase);
 
   // Default Wi-Fi ACK timing assumes an indoor room. Leave it unset on a
   // kilometre link and the retries eat the airtime.
   const ackFactor = p.ackSet ? 1 : D <= 300 ? 1 : Math.max(0.1, 1 - (D - 300) / 1200);
 
   // The wired side. Traffic crosses a port at each end, so the link is held to
-  // the slower of the two — and a Fast Ethernet port is a hard 94 Mbps however
+  // the slower of the two, and a Fast Ethernet port is a hard 94 Mbps however
   // good the air is. This is the whole reason the 5.8 GHz Rocket was worth
   // replacing rather than re-aiming, and it is invisible in a pure RF budget.
   const ethCap = Math.min(baseRadio.eth, roverRadio.eth) * ETH_EFFICIENCY;
@@ -671,10 +687,15 @@ export function solve(p, distance) {
 
   // "Fits" has to mean the mission actually runs, which takes more than the
   // arithmetic closing. A link that carries 8 Mbps whenever it is up, but is
-  // only up half the drive, does not fly the mission — so demand both that the
+  // only up half the drive, does not fly the mission, so demand both that the
   // two flows fit the airtime and that the link is there to carry them.
   const MISSION_UPTIME = 0.9;
   const linkAvail = Math.min(down.linkAvail, up.linkAvail);
+  // The link's margin is the worse direction's, for the same reason its uptime
+  // is: a link is only as good as the end that fails first. Exposed at the top
+  // level next to linkAvail because everything that asks "how much fade can
+  // this take" means the pair, not one direction of it.
+  const linkMargin = Math.min(down.linkMargin, up.linkMargin);
   const fits = down.up && up.up && airtime <= 1 && linkAvail >= MISSION_UPTIME;
 
   return {
@@ -683,6 +704,7 @@ export function solve(p, distance) {
     txMaxBase: baseBand.txMax, txMaxRover: roverBand.txMax,
     D, elevDeg, vBase: vBeam, hBase: hBeam, vRover, impliedGain, impliedRef, bandDrop,
     baseGain, roverGain, baseAz, baseEl, baseEff, roverEff, roverRolloff,
+    baseCable, roverCable,
     capBase, capRover, obstruction, ground, groundRaw, clearance,
     ridgeInPath, fsplDb, pathLoss, ackFactor,
     onMap,
@@ -695,7 +717,7 @@ export function solve(p, distance) {
     lateral: D * Math.tan((hBeam / 2) * (Math.PI / 180)),
     down: {...down, capacity: capDown, air: airDown},
     up: {...up, capacity: capUp, air: airUpNeed},
-    airtime, fits, linkAvail,
+    airtime, fits, linkAvail, linkMargin,
   };
 }
 
@@ -736,6 +758,307 @@ export function sweepRange(p) {
   };
 }
 
+// ------------------------------------------------------- concurrent bands
+//
+// The NetMetal ax runs 2.4 and 5 GHz at the same time on the same diplexed
+// pair, and the whole VLAN split exists so Babel can see them as two links. A
+// model that solves one band at a time cannot describe that architecture, and
+// picking a band in a dropdown quietly asks the wrong question: you do not
+// choose a band, you choose which band carries which flow.
+//
+// So: solve every band both radios have, then say who should carry what.
+
+// How much of the fade the bands share. The deterministic part of a path. Free
+// space, diffraction over a ridge, antenna gain. Genuinely differs per band,
+// and that is real diversity you can bank. The random shadow fade over the same
+// dirt is mostly common to both, and crediting it twice is how a link budget
+// talks itself into an availability it does not have.
+//
+// Rather than pick a correlation and pretend to know it, report both ends:
+// fully correlated is the floor, independent is the ceiling, and the honest
+// answer is nearer the floor.
+export function combineAvailability(avails) {
+  if (!avails.length) return {lo: 0, hi: 0};
+  const lo = Math.max(...avails);
+  const hi = 1 - avails.reduce((acc, a) => acc * (1 - a), 1);
+  return {lo, hi};
+}
+
+export function solveBands(p, distance) {
+  const base = normalizeRadio(p.baseRadio);
+  const rover = normalizeRadio(p.roverRadio);
+  const ids = Object.keys(BANDS).filter((id) => radioHasBand(base, id) && radioHasBand(rover, id));
+
+  const bands = ids.map((id) => {
+    // Each band runs the widest channel both ends tune there, capped by any
+    // rule that applies to it. You do not fly 20 MHz on 900 MHz.
+    const widths = radioBand(base, id).widths.filter((w) => radioBand(rover, id).widths.includes(w));
+    const ruleMax = RULE_MAX_WIDTH[id] ?? Infinity;
+    const legal = widths.filter((w) => w <= ruleMax);
+    const width = (legal.length ? legal : widths).slice(-1)[0] || 20;
+    return {id, label: BANDS[id].label, width, r: solve({...p, band: id, width}, distance)};
+  });
+
+  const up = bands.filter((b) => b.r.up.up && b.r.down.up);
+  const byVideo = [...up].sort((a, b) => b.r.up.capacity - a.r.up.capacity);
+  const byHold = [...up].sort((a, b) => b.r.linkAvail - a.r.linkAvail);
+
+  // Video wants rate, control wants to still be there when the rate is gone.
+  // On this rover they are deliberately different answers, which is the entire
+  // argument for keeping 900 MHz alive next to a Wi-Fi 6 radio.
+  const video = byVideo.find((b) => b.r.up.capacity >= VIDEO_FLOOR) || byVideo[0] || null;
+  const control = byHold[0] || null;
+  const {lo, hi} = combineAvailability(bands.map((b) => b.r.linkAvail));
+
+  // Split across two radios and each flow owns its own airtime; on one band the
+  // two share it, which is what solve() already worked out.
+  const split = Boolean(video && control && video.id !== control.id);
+  const fits = split
+    ? video.r.up.capacity >= VIDEO_FLOOR &&
+      control.r.down.capacity >= CONTROL_FLOOR &&
+      Math.min(video.r.linkAvail, control.r.linkAvail) >= 0.9
+    : Boolean(video && video.r.fits);
+
+  // Both radios come down ONE Ethernet cable, because the NetMetal has one
+  // port. Each band's own solve() has already held it to that port, but they
+  // are sharing it, not getting one each, so the aggregate is what the wire
+  // actually sees. Close in with both bands on their widest legal channel this
+  // is the binding constraint: the air is worth more than a gigabit port will
+  // carry, and the 2.5G SFP is the way out of it.
+  const trunkCap = bands.length
+    ? Math.min(...bands.map((b) => b.r.ethCap))
+    : 0;
+  const airTotal = bands.reduce((a, b) => a + b.r.up.capacity, 0);
+  const trunkBound = bands.length > 1 && airTotal > trunkCap + 0.01;
+
+  return {
+    bands, video, control, split, fits, availLo: lo, availHi: hi, ids,
+    trunkCap, airTotal, trunkBound,
+  };
+}
+
+// ------------------------------------------------------------- sensitivity
+//
+// "What is actually limiting this link right now?" is the question the sliders
+// cannot answer, because every one of them moves the number and none of them
+// says by how much relative to the others. Perturb each knob by a step someone
+// could really take, re-solve, and rank by what it bought.
+//
+// The metric is the worse direction's bottom-rung margin, which is the dB the
+// link is up or down by, not the headline Mbps, which can improve while the
+// link gets less reliable.
+
+const marginOf = (r) => Math.min(r.up.linkMargin, r.down.linkMargin);
+
+// Each entry is a move you could actually make on a Tuesday, not a unit step:
+// one more metre of mast, one antenna class up, the short jumper instead of the
+// long one. That is what makes the ranking a to-do list rather than a gradient.
+export const LEVERS = [
+  {key: 'baseH', label: 'Raise the mast', delta: 1, unit: 'm', max: 12,
+   note: 'rule 3.b.iv caps this at 3 m'},
+  {key: 'roverH', label: 'Raise the rover element', delta: 0.5, unit: 'm', max: 3},
+  {key: 'baseGain', label: 'Bigger base antenna', delta: 3, unit: 'dB', max: 30,
+   note: 'narrows the beam by the same arithmetic'},
+  {key: 'roverGain', label: 'Bigger rover antenna', delta: 3, unit: 'dB', max: 12,
+   note: 'and a shorter toroid to fall out of'},
+  {key: 'baseCable', label: 'Shorten the base jumper', delta: -1, unit: 'dB', min: 0},
+  {key: 'roverCable', label: 'Shorten the rover pigtail', delta: -0.3, unit: 'dB', min: 0},
+  {key: 'baseTx', label: 'More base TX power', delta: 3, unit: 'dB'},
+  {key: 'roverTx', label: 'More rover TX power', delta: 3, unit: 'dB'},
+  {key: 'downtilt', label: 'Remove downtilt', delta: -5, unit: '°', min: 0},
+  {key: 'interference', label: 'Quieter channel', delta: -6, unit: 'dB', min: -20},
+  {key: 'distance', label: 'Drive 200 m closer', delta: -200, unit: 'm', min: 50},
+];
+
+// A lever that buys nothing is the most interesting row in the table, and there
+// are three quite different ways to buy nothing. Saying which one turns a list
+// of zeroes into the argument the page is trying to make.
+function whyNothing(base, next) {
+  const tight = base.up.linkMargin <= base.down.linkMargin ? 'up' : 'down';
+  const slack = tight === 'up' ? 'down' : 'up';
+  const helped = next[tight].linkMargin - base[tight].linkMargin;
+  const other = next[slack].linkMargin - base[slack].linkMargin;
+  if (Math.abs(helped) > 0.05) return null;
+
+  // Transmit-side money on a link already pinned at the Part 15 ceiling: the
+  // lever raised what the radio wanted to radiate and the law took all of it.
+  // Read off eirpRaw rather than guessed from the lever's name, so it cannot
+  // blame the cap for something on the other side of the link. The rover's TX
+  // power is nowhere near the ceiling even when the base is sitting on it.
+  //
+  // Read at the BOTTOM rung, because that is the rung linkMargin belongs to.
+  // The typical rung is wherever rate control has settled, and up there the
+  // radio's own backoff has usually taken the power below the TX setting, so it
+  // would report a knob as inert that is squarely against the legal ceiling.
+  const b0 = base[tight].rungs[0];
+  const n0 = next[tight].rungs[0];
+  if (n0.eirpRaw > b0.eirpRaw + 0.05 && b0.capped && n0.capped) {
+    return 'absorbed by the Part 15 EIRP cap. You are already radiating the legal maximum';
+  }
+  if (Math.abs(other) > 0.25) {
+    return `only helps ${slack === 'up' ? 'rover → base' : 'base → rover'}, which is not the tight direction`;
+  }
+  return 'this link is not limited by that';
+}
+
+export function sensitivity(p, distance) {
+  const at = (patch, d) => solve({...p, ...patch}, d ?? distance);
+  const base = at({}, distance);
+  const ref = marginOf(base);
+  const refRate = Math.min(base.up.capacity, base.down.capacity);
+
+  const score = (lv, next, from, to, available) => ({
+    ...lv,
+    from,
+    to,
+    available,
+    gain: available ? marginOf(next) - ref : 0,
+    dUp: available ? next.up.linkMargin - base.up.linkMargin : 0,
+    dDown: available ? next.down.linkMargin - base.down.linkMargin : 0,
+    // What it costs. Margin bought by throwing away rate is still worth having
+    //. This link needs 8 Mbps and has hundreds, but it should be on the label.
+    rateFrom: refRate,
+    rateTo: available ? Math.min(next.up.capacity, next.down.capacity) : refRate,
+    why: available ? whyNothing(base, next) : 'already at its limit',
+  });
+
+  const rows = LEVERS.map((lv) => {
+    const now = lv.key === 'distance' ? distance : p[lv.key];
+    let to = now + lv.delta;
+    if (lv.min !== undefined) to = Math.max(lv.min, to);
+    if (lv.max !== undefined) to = Math.min(lv.max, to);
+    // A lever already at its stop is not a small win, it is not available, and
+    // saying so is more useful than reporting a zero it has to share with
+    // everything that genuinely does nothing.
+    const moved = Math.abs(to - now) > 1e-9;
+    const next = lv.key === 'distance' ? at({}, to) : at({[lv.key]: to}, distance);
+    return score(lv, next, now, to, moved);
+  });
+
+  // Channel width is not a slider you nudge, it is a choice, so it is scored
+  // against the next narrower legal option instead of against a delta.
+  const ruleMax = RULE_MAX_WIDTH[p.band] ?? Infinity;
+  const widths = Object.keys(WIDTHS)
+    .map(Number)
+    .filter((w) => w < p.width && w <= ruleMax)
+    .sort((a, b) => a - b);
+  const narrower = widths[widths.length - 1];
+  if (narrower) {
+    rows.push(
+      score(
+        {key: 'width', label: `Narrow the channel to ${narrower} MHz`, unit: 'MHz',
+         note: 'every halving of bandwidth is about 3 dB of noise floor'},
+        at({width: narrower}, distance), p.width, narrower, true,
+      ),
+    );
+  }
+
+  return {
+    ref,
+    tight: base.up.linkMargin <= base.down.linkMargin ? 'up' : 'down',
+    rows: rows.sort((a, b) => b.gain - a.gain),
+  };
+}
+
+// --------------------------------------------------------------- coverage
+//
+// Everything else on this page answers "does the link work where the rover is
+// standing". The question a siting argument actually turns on is "where can the
+// rover GO", and that is a shape, not a number.
+//
+// Swept in polar coordinates around the base, because that is how the answer is
+// shaped. A lobe, not a rectangle, and because it costs a fiftieth of what a
+// Cartesian raster of the same fidelity would.
+
+export const COVER_BEARINGS = 72; // every 5 degrees
+export const COVER_RANGES = 44;
+
+// What a cell is worth. Uptime is the honest default: a cell where the link
+// exists 60% of the drive is not a cell you can work in, whatever its Mbps say.
+export const COVER_METRICS = {
+  uptime: {label: 'Link uptime', pick: (r) => r.linkAvail, fmt: (v) => `${(v * 100).toFixed(0)}%`},
+  video: {label: 'Video fits', pick: (r) => (r.fits ? 1 : 0), fmt: (v) => (v > 0.5 ? 'yes' : 'no')},
+  rate: {label: 'Rover → base Mbps', pick: (r) => r.up.capacity, fmt: (v) => `${v.toFixed(0)}`},
+};
+
+// One bearing's worth of the sweep. Handing back a row at a time is what lets
+// the caller spread ~3000 solves over several frames instead of freezing the
+// page for a second and a half every time a slider moves.
+export function coverageRow(p, bearing, maxD, nRanges = COVER_RANGES) {
+  const out = new Float64Array(nRanges);
+  const fitsRow = new Uint8Array(nRanges);
+  const rates = new Float64Array(nRanges);
+  for (let i = 0; i < nRanges; i++) {
+    const d = ((i + 1) / nRanges) * maxD;
+    const r = solve({...p, heading: bearing}, d);
+    out[i] = r.linkAvail;
+    fitsRow[i] = r.fits ? 1 : 0;
+    rates[i] = r.up.capacity;
+  }
+  return {bearing, uptime: out, fits: fitsRow, rate: rates};
+}
+
+// How far out the sweep should look: past the point the link has been dead for
+// a while there is nothing left to draw, and on a map there is no ground either.
+export function coverageReach(p) {
+  if (p.site === 'off') return 3000;
+  let reach = 0;
+  for (let b = 0; b < 360; b += 30) reach = Math.max(reach, distanceToEdge(p.baseE, p.baseN, b));
+  return clamp(Math.round(reach / 100) * 100, 500, 4000);
+}
+
+// The whole sweep. ~3200 solves, which measures at about 35 ms on the bundled
+// grid and roughly triple that once the fine heightmap has landed. Fast enough
+// to run inline, slow enough that the caller should not run it on every frame
+// of a drag.
+export function coverageField(p, reach, nB = COVER_BEARINGS, nR = COVER_RANGES) {
+  const uptime = new Float32Array(nB * nR);
+  const fits = new Uint8Array(nB * nR);
+  const rate = new Float32Array(nB * nR);
+  for (let b = 0; b < nB; b++) {
+    const row = coverageRow(p, (b * 360) / nB, reach, nR);
+    for (let i = 0; i < nR; i++) {
+      uptime[b * nR + i] = row.uptime[i];
+      fits[b * nR + i] = row.fits[i];
+      rate[b * nR + i] = row.rate[i];
+    }
+  }
+  // The headline the picture is for, in square kilometres of ground you can
+  // actually work in.
+  //
+  // Not a percentage: the denominator would be the disc the sweep happened to
+  // cover, which is set by where the heightmap runs out rather than by anything
+  // about the link. A build that reaches 1.5 km scored 7% against a 3.8 km disc
+  // and 60% against a 2 km one, having done exactly the same thing both times.
+  // An area is the same number whatever the sweep did, so two builds can be
+  // compared by it.
+  let workableM2 = 0;
+  for (let b = 0; b < nB; b++) {
+    for (let i = 0; i < nR; i++) {
+      if (!fits[b * nR + i]) continue;
+      const r0 = (i / nR) * reach;
+      const r1 = ((i + 1) / nR) * reach;
+      workableM2 += (Math.PI * (r1 * r1 - r0 * r0)) / nB;
+    }
+  }
+  return {nB, nR, reach, uptime, fits, rate, workableKm2: workableM2 / 1e6};
+}
+
+// Everything the sweep depends on. Deliberately NOT the rover's position, which
+// is the one thing a coverage map is supposed to be independent of. Used as a
+// memo key so dragging the rover around never re-runs three thousand solves.
+export function coverageSignature(p) {
+  return [
+    p.site, p.baseE, p.baseN, p.baseH, p.roverH, p.band, p.width,
+    p.baseTx, p.roverTx, p.baseGain, p.baseHBeam, p.baseVBeam, p.baseCable,
+    p.baseKind, p.baseRefMHz, p.roverGain, p.roverCable, p.roverRefMHz,
+    p.aim, p.downtilt, p.tilt, p.reg, p.interference, p.ackSet,
+    p.baseChains, p.baseXpol, p.roverChains, p.roverXpol,
+    p.ridgeH, p.ridgeD, p.bearing,
+    p.baseRadio && p.baseRadio.id, p.roverRadio && p.roverRadio.id,
+  ].join('|');
+}
+
 export const DEFAULTS = {
   band: '5.8',
   width: 20,
@@ -749,8 +1072,8 @@ export const DEFAULTS = {
   baseHBeam: 20,
   baseVBeam: 20,
   baseCable: 0.4,
-  // What the antenna is and what band its numbers came off. Absent — as every
-  // saved setup from before the gear library was band-aware leaves them — the
+  // What the antenna is and what band its numbers came off. Absent, as every
+  // saved setup from before the gear library was band-aware leaves them. The
   // model reads a 5.8 GHz panel, which is what those numbers always meant.
   baseKind: 'sector',
   baseRefMHz: REF_MHZ,

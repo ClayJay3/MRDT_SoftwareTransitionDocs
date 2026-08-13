@@ -1,6 +1,6 @@
 import React, {useMemo, useState} from 'react';
 import styles from './signalViews.module.css';
-import {SITES} from './terrainModel';
+import {SITES, siteLabel} from './terrainModel';
 import {
   BANDS,
   CONTROL_FLOOR,
@@ -8,13 +8,18 @@ import {
   PRESETS,
   VIDEO_FLOOR,
   clamp,
+  coverageField,
+  coverageReach,
+  coverageSignature,
   dbToLin,
   log10,
+  sensitivity,
   solve,
   sweepRange,
 } from './signalModel';
 import {
   CONTROL,
+  CoverageLegend,
   DirPanel,
   Help,
   InfoPanel,
@@ -28,10 +33,12 @@ import {
   Slider,
   SpecCheck,
   TopView,
+  TornadoPanel,
   VIDEO,
   adviceOf,
   d0,
   d1,
+  useDebounced,
   useFineTerrain,
   verdictOf,
 } from './signalViews';
@@ -94,6 +101,18 @@ export default function SignalLab() {
   const siteInfo = SITES.find((s) => s.id === p.site) || SITES[0];
 
   const sweep = useMemo(() => sweepRange(p), [p, fineRev]);
+  const sens = useMemo(() => sensitivity(p, p.distance), [p, fineRev]);
+
+  // Where the rover can go, rather than whether it works where it is standing.
+  // Off by default even here: it is the expensive one, and the embed should
+  // still be cheap to scroll past.
+  const [showCover, setShowCover] = useState(false);
+  const coverSig = useDebounced(`${coverageSignature(p)}|${fineRev}|${showCover}`, 140);
+  const coverage = useMemo(() => {
+    if (!showCover || !onMap) return null;
+    return coverageField(p, coverageReach(p));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverSig]);
   const verdict = verdictOf(r);
   const advice = adviceOf(r);
 
@@ -139,7 +158,8 @@ export default function SignalLab() {
               <>
                 <div className={styles.mapBox}>
                   <div className={styles.mapStage}>
-                    <MapView p={p} r={r} view={view} setView={setView} onChange={patch} />
+                    <MapView p={p} r={r} view={view} setView={setView} onChange={patch}
+                             coverage={coverage} coverMetric="uptime" />
                     <div className={styles.mapLayers}>
                       {[['sat', 'Satellite'], ['both', 'Both'], ['topo', 'Contours']].map(([v, txt]) => (
                         <button key={v} type="button"
@@ -149,6 +169,12 @@ export default function SignalLab() {
                           {txt}
                         </button>
                       ))}
+                      <button type="button"
+                              className={`${styles.mapChip} ${showCover ? styles.mapChipOn : ''}`}
+                              aria-pressed={showCover}
+                              onClick={() => setShowCover((v) => !v)}>
+                        Coverage
+                      </button>
                     </div>
                     <div className={styles.mapZoom}>
                       <button type="button" className={styles.mapChip} aria-label="Zoom in"
@@ -165,6 +191,12 @@ export default function SignalLab() {
                     zoom, drag the square to move the base, the arrow to aim it, the circle to
                     place the rover · imagery sharpens as you zoom
                     {fine ? ' · terrain at 11.7 m' : ' · terrain at 30 m'}
+                    {coverage && (
+                      <>
+                        {' · '}
+                        <CoverageLegend metric="uptime" workableKm2={coverage.workableKm2} />
+                      </>
+                    )}
                   </p>
                 </div>
                 <SiteCard p={p} r={r} site={siteInfo} />
@@ -190,6 +222,7 @@ export default function SignalLab() {
           need={VIDEO_FLOOR} tag="of video"
         />
         <PathPanel r={r} sweep={sweep} />
+        <TornadoPanel sens={sens} />
       </div>
 
       <RangeChart sweep={sweep} r={r} />
@@ -266,7 +299,7 @@ export default function SignalLab() {
           <Pills
             label="Terrain"
             value={p.site}
-            options={[['off', 'flat + ridge'], ...SITES.map((s) => [s.id, s.id === 'mdrs' ? 'MDRS' : 'Rolla'])]}
+            options={[['off', 'flat + ridge'], ...SITES.map((s) => [s.id, siteLabel(s.id)])]}
             onChange={setSite}
           />
           <Slider help="aim" label="Sector aim" value={p.aim} min={0} max={359} step={1} unit="° from N"

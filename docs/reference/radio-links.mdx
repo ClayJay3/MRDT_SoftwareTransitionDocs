@@ -1,0 +1,99 @@
+---
+title: The radio links, condensed
+description: One page on how the three wireless links are built, why the dual-band radio counts as two of them, and how they reach the routing layer.
+---
+
+# The radio links, condensed
+
+Everything here is argued at length in [Signals](../foundations/signals) and [Babel](../foundations/babel). This is the short version, for when you are configuring rather than deciding.
+
+## What runs on what
+
+| Box | Firmware | Job | Why not something else |
+|---|---|---|---|
+| **RB5009**, one per side | OpenWrt + FRR | Routing. Babel, OSPF, PIM, tc | RouterOS has no Babel. [Mainline OpenWrt since 24.10](../foundations/babel#1-flash-openwrt) |
+| **NetMetal ax**, one per side | RouterOS | Two transparent bridges, 2.4 and 5 GHz | 256 MB RAM puts it under OpenWrt's 512 MB floor. It has no routing to do anyway |
+| **Rocket M900**, one per side | airOS | One transparent bridge, 900 MHz | Unchanged from today |
+
+Only the RB5009 gets flashed. The radios stay on their vendor firmware and stay dumb.
+
+## Three links, not two
+
+The routing layer sees **three** wireless links, because the NetMetal contributes two of them:
+
+| Link | Radio | Subnet | Rover | Base |
+|---|---|---|---|---|
+| 900 MHz | Rocket M900 | `10.0.0.0/29` | `.1` | `.2` |
+| 2.4 GHz | NetMetal `wifi2` | `10.0.0.8/29` | `.9` | `.10` |
+| 5.8 GHz | NetMetal `wifi1` | `10.0.0.16/29` | `.17` | `.18` |
+
+`vtysh -c 'show babel neighbor'` must show **three neighbours**. Two means something got bridged together and the frequency diversity is gone.
+
+## Why the dual-band radio is two links
+
+A 2.4 GHz radio and a 5 GHz radio are two independent PHYs. Each forms its own association and has its own MAC, so there is no single link for the router to see. This is not a firmware choice: RouterOS calls them `wifi1` and `wifi2`, OpenWrt would call them `phy0` and `phy1`.
+
+Merging them into one association is a real feature called **Multi-Link Operation**, and it arrived with Wi-Fi 7. The NetMetal ax is Wi-Fi 6, so it does not have it.
+
+Do not fake it with one SSID on both bands. A station associates to one band at a time, so you get one band idle, a reassociation costing seconds instead of a route change costing milliseconds, and a decision made on signal strength by a station that cannot see packet loss.
+
+## One cable, two links
+
+The NetMetal has one Ethernet port. Both radios share it, and the **VLAN tag** is what says which radio a frame belongs to.
+
+| VLAN | Radio | On the wire | On the RB5009 |
+|---|---|---|---|
+| 24 | `wifi2`, 2.4 GHz | tagged on `ether1` | `p3.24`, `10.0.0.9/29` |
+| 58 | `wifi1`, 5 GHz | tagged on `ether1` | `p3.58`, `10.0.0.17/29` |
+
+Each radio is an **access port** on its own VLAN. The Ethernet port is a **trunk** carrying both. A frame sent tagged 58 has its tag stripped and goes out the 5 GHz radio; the far end puts the tag back on. The tag lives on the two copper runs and never on the air.
+
+The two lines that do it:
+
+```routeros
+/interface/bridge/vlan
+add bridge=br0 vlan-ids=58 tagged=ether1 untagged=wifi1
+add bridge=br0 vlan-ids=24 tagged=ether1 untagged=wifi2
+```
+
+Full config in [Signals](../foundations/signals#the-config-in-outline).
+
+## The three things that silently break it
+
+**Wrong station mode.** The rover radios must be `station-bridge`. Plain `station` uses three-address frames, which cannot carry a source MAC other than the station's own, so everything behind the rover router is invisible. The link associates, reports up, and passes nothing. `station-pseudobridge` is not a substitute.
+
+**Mismatched package families.** MikroTik's `wifi` station-bridge is incompatible with the older `wireless` package. Two NetMetal ax units pair correctly. An ax against a NetMetal ac² does not.
+
+**Mirrored VLAN mapping.** If the base has VLAN 58 on 5 GHz and the rover has 58 on 2.4 GHz, everything still passes and Babel still sees three neighbours. It is simply measuring the wrong link, and nothing in the output looks wrong.
+
+## What the routing layer does with it
+
+Babel measures **ETX per link**, so the three links are compared on delivered packets rather than on nominal speed. Traffic is then split by source, from separate tables:
+
+- **control** (`192.168.2.x`, `192.168.3.x`: motors, telemetry, autonomy) follows the **most reliable** link, lowest ETX
+- **video** (`192.168.4.x`: cameras, science) follows the link with the **most deliverable throughput**, capacity times delivery ratio
+
+They are frequently different links, and that is the point. When 5.8 GHz degrades behind terrain, control moves to 900 MHz while video stays wherever the bits still flow. Where both land on the same link, the tc priority queue serves control first.
+
+Camera feeds are UDP multicast on `239.0.0.1` to `239.0.0.10`, which Babel does not carry, so PIM handles them separately.
+
+## Ceilings worth knowing
+
+| Limit | Value | When it bites |
+|---|---|---|
+| Trunk to the NetMetal | ~940 Mbps usable | Both bands wide open at short range come to about 976 Mbps. Move to the 2.5G SFP |
+| 900 MHz channel | 8 MHz, rule 3.b.v | Always. The radio will offer 20 and you cannot fly it |
+| Part 15 EIRP | 36 dBm point-to-multipoint | Always on the base. More antenna gain buys receive margin only |
+| Rover spatial streams | 1, with two vertical omnis | Always, unless the rover element is cross-polarised |
+
+## Bring-up checklist
+
+1. Flash both RB5009s with OpenWrt, [three-stage netboot](../foundations/babel#1-flash-openwrt).
+2. Configure the NetMetals: two SSIDs, base `ap` and rover `station-bridge`, bridge VLANs 24 and 58, VLAN filtering switched on **last**.
+3. Confirm the mapping is identical at both ends before trusting anything.
+4. Bring up `p2`, `p3.24` and `p3.58` on the routers with the addresses above.
+5. `show babel neighbor` and count **three**.
+6. Jam one band deliberately and confirm only that link's ETX moves.
+7. Drive-test with RSSI logging before believing any of the modelled numbers.
+
+Model a specific path first in [Signal Studio](/signal-studio), where the published bench list has the builds this page assumes. Publishing a bench there stores it on this host, in the `benches` service alongside the site, so anyone signed in can name a setup and find it again later. See `server/gear/README.md` in the repo.

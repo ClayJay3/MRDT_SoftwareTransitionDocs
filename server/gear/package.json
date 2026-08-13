@@ -1,0 +1,10 @@
+{
+  "name": "mrdt-gear",
+  "private": true,
+  "type": "module",
+  "description": "Shared gear library API for the MRDT Software Bible signal studio",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

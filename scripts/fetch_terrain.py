@@ -18,7 +18,7 @@ Two resolutions come out of this, because the two jobs have different budgets:
     rendering and the first paint use, so it has to be in the JS bundle and
     therefore has to be small.
   * a FINE grid, written as a raw int16 file under static/. The browser fetches
-    it once per site, caches it, and swaps it in — so the diffraction and
+    it once per site, caches it, and swaps it in, so the diffraction and
     Fresnel numbers settle onto 3DEP's own resolution instead of a 30 m
     resample. Nothing downstream becomes async: the model keeps reading
     whichever grid is loaded right now.
@@ -56,7 +56,7 @@ TILE = 256
 # Orthoimagery for the map background. This is the baked fallback: it is what
 # renders before any tile arrives and what the map falls back to offline, so it
 # covers the whole window in one file. z16 is ~1.9 m/px at these latitudes and
-# is the deepest level USGS actually caches — 2048 px over 6 km is 2.9 m/px,
+# is the deepest level USGS actually caches. 2048 px over 6 km is 2.9 m/px,
 # close enough to that ceiling to be worth the bytes and no further.
 #
 # Past 1x the map layers live USGS tiles on top of this; see signalViews.js.
@@ -68,16 +68,27 @@ SITES = [
     {
         "id": "mdrs",
         "name": "Mars Desert Research Station",
-        "sub": "Hanksville, Utah — where URC runs",
+        "sub": "Hanksville, Utah, where URC runs",
         "lat": 38.406390,
         "lon": -110.791940,
     },
     {
         "id": "rolla",
         "name": "Rolla test site",
-        "sub": "Missouri S&T — the home field",
+        "sub": "Missouri S&T, the home field",
         "lat": 37.950030,
         "lon": -91.783062,
+    },
+    # Tucumcari Mountain, the mesa south-east of town. The window is centred on
+    # a spot chosen by hand rather than on the summit, so the mesa sits off to
+    # one side and there is flat ground to work from as well as a hard edge to
+    # hide behind.
+    {
+        "id": "tucumcari",
+        "name": "Tucumcari Mountain",
+        "sub": "New Mexico, the mesa the autonomy LiDAR covers",
+        "lat": 35.160370,
+        "lon": -103.703198,
     },
 ]
 
@@ -290,7 +301,7 @@ def verify(site, grid, label="grid"):
     print("    %s: checked %d points against USGS ned10m: mean |dz| %.2f m, worst %.2f m"
           % (label, len(diffs), sum(diffs) / len(diffs), worst), flush=True)
     if worst > 25.0:
-        raise RuntimeError(f"terrain disagrees with USGS by {worst:.1f} m — refusing to write")
+        raise RuntimeError(f"terrain disagrees with USGS by {worst:.1f} m. Refusing to write")
     return sum(diffs) / len(diffs), worst
 
 
@@ -346,7 +357,7 @@ def main():
         })
 
     lines = [
-        "// GENERATED FILE — do not edit by hand.",
+        "// GENERATED FILE. Do not edit by hand.",
         "// Regenerate with:  python3 scripts/fetch_terrain.py",
         "//",
         "// Terrain for the SignalLab map view. Elevation comes from the AWS Terrain",
@@ -361,7 +372,7 @@ def main():
         "//",
         "// Two grids per site, because SSR and accuracy want different things:",
         "//",
-        f"//   * the inlined one below — {GRID}x{GRID}, {SPAN_M / (GRID - 1):.1f} m per sample — is what the",
+        f"//   * the inlined one below, {GRID}x{GRID} at {SPAN_M / (GRID - 1):.1f} m per sample, is what the",
         "//     bundle carries, so it renders on the server and on the first frame.",
         f"//   * `fine` names a {FINE_GRID}x{FINE_GRID} file ({SPAN_M / (FINE_GRID - 1):.1f} m per sample, i.e. 3DEP's own",
         "//     resolution) under static/. The browser fetches it once, and installFine()",
@@ -395,7 +406,7 @@ def main():
         "];",
         "",
         "// Every grid carries the side length it was sampled at, so a consumer never",
-        "// has to know which of the two it is holding — and swapping one for the other",
+        "// has to know which of the two it is holding, and swapping one for the other",
         "// cannot silently reinterpret the rows.",
         "const tag = (arr, n) => {",
         "  arr.n = n;",

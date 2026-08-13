@@ -1,8 +1,12 @@
 # Dependencies
 /node_modules
 
+# Persistent Data
+/gear-data
+
 # Production
 /build
+/build-studio
 
 # Generated files
 .docusaurus

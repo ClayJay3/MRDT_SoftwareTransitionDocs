@@ -127,7 +127,7 @@
 /* Pointer dragging needs touch-action off or mobile scrolls instead of drags. */
 .map { touch-action: none; cursor: crosshair; user-select: none; background: var(--ifm-color-emphasis-200); border-radius: 8px; }
 /* Filling a window rather than sitting in a column: no corners, no gap. The
-   compound selector matters — the generic .svg rule sets height:auto further
+   compound selector matters. The generic .svg rule sets height:auto further
    down the file, which would otherwise force the box back to the viewBox's own
    aspect and defeat the measurement. */
 .map.mapCover { border-radius: 0; width: 100%; height: 100%; cursor: grab; }
@@ -355,8 +355,8 @@
 /* ----------------------------------------------------------------- dense */
 
 /* The doc page can afford to breathe: it scrolls, and the lab is one figure in
-   a long article. The studio cannot — it is one screen that has to hold a whole
-   bench — so it runs the same controls and panels tighter. Same widgets, same
+   a long article. The studio cannot. It is one screen that has to hold a whole
+   bench, so it runs the same controls and panels tighter. Same widgets, same
    numbers, less air. */
 .dense .group { padding: calc(0.4 * var(--sl-u)) calc(0.5 * var(--sl-u)); }
 .dense .group h6 { margin-bottom: calc(0.22 * var(--sl-u)); font-size: calc(0.68 * var(--sl-u)); }
@@ -509,3 +509,102 @@
 .glass .sky { fill: color-mix(in srgb, var(--ifm-background-color) 78%, transparent); }
 .glass .figure { line-height: 0; }
 .glass .legend { line-height: 1.3; }
+
+/* ------------------------------------------------------- the newer panels */
+
+.panelFoot {
+  margin: calc(0.4 * var(--sl-u)) 0 0;
+  font-size: calc(0.7 * var(--sl-u));
+  line-height: 1.4;
+  color: var(--ifm-color-emphasis-600);
+}
+.muted { color: var(--ifm-color-emphasis-500); }
+
+/* A role tag on the band that is carrying something. Sits inline after the
+   band name rather than in its own column, because the column would be empty
+   on every row that is not carrying anything. */
+.roleTag {
+  margin-left: calc(0.35 * var(--sl-u));
+  padding: 0 calc(0.3 * var(--sl-u));
+  border-radius: calc(0.3 * var(--sl-u));
+  background: var(--ifm-color-emphasis-200);
+  color: var(--ifm-color-emphasis-800);
+  font-size: calc(0.62 * var(--sl-u));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* The lever list. A bar, a label, a number and a reason. The reason only
+   appears on rows that need one, and those rows are the interesting ones. */
+.levers { list-style: none; margin: 0; padding: 0; }
+.levers li {
+  display: grid;
+  grid-template-columns: calc(2.6 * var(--sl-u)) 1fr auto;
+  align-items: baseline;
+  gap: 0 calc(0.4 * var(--sl-u));
+  padding: calc(0.12 * var(--sl-u)) 0;
+  font-size: calc(0.76 * var(--sl-u));
+  border-top: 1px solid var(--ifm-color-emphasis-200);
+}
+.levers li:first-child { border-top: 0; }
+.leverDead { color: var(--ifm-color-emphasis-500); }
+.leverBar {
+  display: block;
+  height: calc(0.42 * var(--sl-u));
+  border-radius: calc(0.21 * var(--sl-u));
+  background: var(--ifm-color-emphasis-200);
+  overflow: hidden;
+}
+.leverBar i { display: block; height: 100%; border-radius: inherit; }
+.leverLbl { min-width: 0; }
+.leverVal { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.leverWhy {
+  grid-column: 2 / -1;
+  font-size: calc(0.66 * var(--sl-u));
+  line-height: 1.35;
+  color: var(--ifm-color-emphasis-600);
+}
+
+/* A / B. Four columns, the last one signed and coloured. */
+.cmp { width: 100%; font-size: calc(0.76 * var(--sl-u)); border-collapse: collapse; display: table; }
+.cmp th, .cmp td { padding: calc(0.12 * var(--sl-u)) 0; border: 0; text-align: right; }
+.cmp th:first-child, .cmp td:first-child {
+  text-align: left;
+  color: var(--ifm-color-emphasis-600);
+  white-space: nowrap;
+  padding-right: calc(0.5 * var(--sl-u));
+}
+.cmp th { font-size: calc(0.66 * var(--sl-u)); color: var(--ifm-color-emphasis-500); font-weight: 600; }
+.cmp td { font-variant-numeric: tabular-nums; }
+.cmp tr { border: 0; background: transparent; }
+.cmp td:last-child { font-weight: 600; }
+
+/* The coverage key, in HTML so it does not scale with the map. */
+.coverKey {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(0.2 * var(--sl-u));
+  font-size: calc(0.68 * var(--sl-u));
+  color: var(--ifm-color-emphasis-700);
+  white-space: nowrap;
+}
+.coverKey i {
+  width: calc(0.7 * var(--sl-u));
+  height: calc(0.7 * var(--sl-u));
+  border-radius: 2px;
+  opacity: 0.75;
+}
+.coverKey span { margin-left: calc(0.25 * var(--sl-u)); }
+.coverKey b { margin-left: calc(0.4 * var(--sl-u)); font-variant-numeric: tabular-nums; }
+
+/* Focus rings on the map handles. They are SVG groups, so the browser gives
+   them nothing by default and a keyboard user cannot see where they are. */
+.handle:focus { outline: none; }
+/* Only the transparent hit-target disc, which is the first circle in every
+   handle group. Restyling the marker itself would repaint the white square. */
+.handle:focus-visible > circle:first-child {
+  fill: rgba(76, 155, 232, 0.35);
+  stroke: #4c9be8;
+  stroke-width: 2;
+}

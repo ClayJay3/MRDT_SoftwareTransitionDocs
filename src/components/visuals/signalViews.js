@@ -25,8 +25,8 @@ export const OK = '#4caf50';
 export const WARN = '#e5a73c';
 export const BAD = '#e06c75';
 
-// The two directions get their own colours everywhere they appear — chart,
-// panel headers, legends — because "solid vs dashed" was doing all the work and
+// The two directions get their own colours everywhere they appear. Chart,
+// panel headers, legends, because "solid vs dashed" was doing all the work and
 // the dashed one happened to land on the same red as the failure markers.
 export const VIDEO = '#4caf50'; // rover → base, the cameras
 export const CONTROL = '#4c9be8'; // base → rover, the joystick
@@ -35,13 +35,13 @@ export const CONTROL = '#4c9be8'; // base → rover, the joystick
 
 // A "?" badge that explains one number. The bubble is position:fixed and placed
 // from the badge's own rect, because every one of these lives inside a rail
-// that scrolls — an absolutely positioned tooltip would be clipped by it.
+// that scrolls. An absolutely positioned tooltip would be clipped by it.
 // Hover, focus and click all open it, so it works from a keyboard and on touch.
 //
 // It is rendered into the body rather than next to the badge, and that is not a
 // nicety. `position: fixed` means "relative to the viewport" only until some
 // ancestor becomes a containing block for fixed descendants, which a non-none
-// backdrop-filter does — and every card in the studio is frosted glass over the
+// backdrop-filter does, and every card in the studio is frosted glass over the
 // map. Left where it was written, the bubble took its viewport coordinates and
 // had the card's own corner added to them, landing it a full panel away from
 // the badge it belonged to.
@@ -72,7 +72,7 @@ export function Help({id}) {
   const hide = () => setTip(null);
 
   // The placement is a snapshot of where the badge was. Anything that moves it
-  // afterwards — the left rail scrolling under the pointer, a window resize —
+  // afterwards: the left rail scrolling under the pointer, or a window resize.
   // would strand the bubble, so it closes instead of lying about what it points
   // at. Capture phase, because the rail scrolls, not the window.
   useEffect(() => {
@@ -419,10 +419,100 @@ const compass = (de, dn) => ((Math.atan2(de, dn) * 180) / Math.PI + 360) % 360;
 const MAP_S = 1000; // the map's own unit square
 const MAX_Z = 8;
 
+// Run a value through a delay, so an expensive derived thing settles instead of
+// being recomputed on every frame of a drag. Returns the last value that stayed
+// still for `ms`.
+export function useDebounced(value, ms) {
+  const [held, setHeld] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setHeld(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return held;
+}
+
+// ---------------------------------------------------------------- coverage
+//
+// The sweep painted onto the map. Everything else on the page answers "does the
+// link work where the rover is standing"; this answers "where can the rover go",
+// which is the question a siting argument actually turns on.
+//
+// Drawn as merged polar cells rather than a raster: it stays vector so it is
+// crisp at 8x zoom, it needs no canvas and so survives server rendering, and
+// merging runs of the same bucket along each bearing collapses ~3200 cells into
+// a couple of hundred paths.
+
+// Bucket edges and their colours, worst first. Deliberately coarse: this is a
+// map of where you can work, not a continuous field, and six bands read at a
+// glance where a smooth ramp does not.
+//
+// The bottom bucket is drawn at zero opacity on purpose. Painting it filled the
+// map. Most of a 4 km disc is somewhere the link does not reach, so the honest
+// picture was a red wash with the answer hidden inside it, and every other
+// colour on the page had to fight through it. Bare ground now means "nothing
+// here", which is both the truth and much easier to read. Opacity then climbs
+// with the bucket, so the eye is pulled to where the rover can actually work.
+const COVER_STOPS = [
+  {upto: 0.5, fill: '#c0392b', alpha: 0, label: 'under 50%'},
+  {upto: 0.8, fill: '#e06c75', alpha: 0.3, label: '50–80%'},
+  {upto: 0.9, fill: '#e5a73c', alpha: 0.34, label: '80–90%'},
+  {upto: 0.97, fill: '#d4d44a', alpha: 0.38, label: '90–97%'},
+  {upto: 0.999, fill: '#7cc45a', alpha: 0.42, label: '97–100%'},
+  {upto: Infinity, fill: '#3f9e46', alpha: 0.46, label: '100%'},
+];
+
+const bucketOf = (v) => COVER_STOPS.findIndex((s) => v <= s.upto);
+
+// Polar cell -> a quad in the map's unit square. The map is linear in metres,
+// so a cell is four straight edges and no arcs are needed at this cell size.
+function cellPath(bx, by, aDeg, bDeg, r0, r1, s) {
+  const pt = (deg, r) => {
+    const th = (deg * Math.PI) / 180;
+    return `${(bx + r * Math.sin(th) * s).toFixed(2)},${(by - r * Math.cos(th) * s).toFixed(2)}`;
+  };
+  return `M${pt(aDeg, r0)}L${pt(bDeg, r0)}L${pt(bDeg, r1)}L${pt(aDeg, r1)}z`;
+}
+
+export function coveragePaths(field, metric, bx, by, s) {
+  if (!field) return [];
+  const {nB, nR, reach} = field;
+  const half = 360 / nB / 2;
+  const runs = COVER_STOPS.map(() => []);
+  const valueAt = (i) =>
+    metric === 'rate'
+      ? clamp(field.rate[i] / (2 * VIDEO_FLOOR), 0, 1)
+      : metric === 'video'
+        ? (field.fits[i] ? 1 : 0)
+        : field.uptime[i];
+
+  for (let b = 0; b < nB; b++) {
+    const aDeg = (b * 360) / nB - half;
+    const bDeg = aDeg + 360 / nB;
+    let i = 0;
+    while (i < nR) {
+      const k = bucketOf(valueAt(b * nR + i));
+      let j = i + 1;
+      while (j < nR && bucketOf(valueAt(b * nR + j)) === k) j++;
+      runs[k].push(cellPath(bx, by, aDeg, bDeg, (i / nR) * reach, (j / nR) * reach, s));
+      i = j;
+    }
+  }
+  return runs
+    .map((d, k) => ({
+      d: d.join(''),
+      fill: COVER_STOPS[k].fill,
+      alpha: COVER_STOPS[k].alpha,
+      label: COVER_STOPS[k].label,
+    }))
+    .filter((x) => x.d && x.alpha > 0);
+}
+
+export const COVER_LEGEND = COVER_STOPS;
+
 // ------------------------------------------------------- the fine heightmap
 //
 // The bundled grid is 30 m a sample so that it can live in the JS bundle and
-// render on the server. The real one is 11.7 m — 3DEP's own resolution — and is
+// render on the server. The real one is 11.7 m. 3DEP's own resolution, and is
 // a plain file the browser fetches once and caches. Nothing waits for it: the
 // page draws on the coarse grid, the fine one lands, and the returned revision
 // changes so whoever is holding a memoised solve() knows to run it again.
@@ -451,7 +541,7 @@ export function useFineTerrain(siteId) {
 // ---------------------------------------------------------- imagery tiles
 //
 // The baked WebP under the map is one file covering the whole 6 km window, which
-// makes it 2.9 m per pixel — fine at 1x, mush at 8x. Past 1x the map lays live
+// makes it 2.9 m per pixel. Fine at 1x, mush at 8x. Past 1x the map lays live
 // USGS National Map tiles over it, picking the zoom level that matches what is
 // actually on screen and drawing only the tiles the viewBox touches.
 //
@@ -460,7 +550,7 @@ export function useFineTerrain(siteId) {
 // The baked image stays underneath as the floor: with no network, a blocked
 // request or a site outside NAIP coverage, the map still draws.
 //
-// z16 is the ceiling because it is where USGS stops caching — z17 and up 404,
+// z16 is the ceiling because it is where USGS stops caching. Z17 and up 404,
 // and rendering them out of the export endpoint returns visibly interpolated
 // NAIP with must-revalidate headers. Nothing above 16 is real detail.
 const TILE_URL =
@@ -571,7 +661,7 @@ function Tile({href, x, y, w, h}) {
 // pinned the pan on the one axis that actually had room to move.
 // How much of the window may be dragged out past the edge of the heightmap.
 // Without it a square map covering an oblong window is pinned on its long axis
-// the moment it fits — at 1x on a wide screen the full 6 km width is on screen
+// the moment it fits, at 1x on a wide screen the full 6 km width is on screen
 // and a sideways drag has nowhere to go, which reads as a broken map rather
 // than as the edge of the data. A third means you can always shove the terrain
 // aside to see what is hiding under the instruments, and never so far that you
@@ -609,24 +699,26 @@ export function panRoom(z, ar = 1, over = 0) {
 
 // `cover` lets the map fill a box of any shape, the way a background image
 // would: z = 1 shows the full 6 km width and the height follows the box. Left
-// off — as the doc page leaves it — the box is square and this is exactly the
+// off, as the doc page leaves it. The box is square and this is exactly the
 // square view it always was.
-export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAspect}) {
+export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAspect, coverage, coverMetric}) {
   const drag = useRef(null);
   const svgRef = useRef(null);
+  // Every pointer currently down on the map, so two of them can be a pinch.
+  const touches = useRef(new Map());
   const [box, setBox] = useState({w: MAP_S, h: MAP_S});
   // What the pointer currently has hold of, purely so the cursor can say so.
   const [grab, setGrab] = useState(null);
   const site = SITES.find((s) => s.id === p.site) || SITES[0];
   const imgSrc = useBaseUrl(site.image);
   // The contours are cut from whichever heightmap is loaded, so they have to be
-  // re-cut when the fine one lands — otherwise the map keeps drawing 30 m
+  // re-cut when the fine one lands. Otherwise the map keeps drawing 30 m
   // terrain under a model that has moved on to 11.7 m.
   const {rev: terrainRev} = useFineTerrain(p.site);
   const bands = useMemo(() => contourBands(p.site), [p.site, terrainRev]);
 
-  // The viewBox has to match the element's shape or the pointer maths — and the
-  // picture — go wrong, so the element measures itself. Measured in both
+  // The viewBox has to match the element's shape or the pointer maths, and the
+  // picture. Go wrong, so the element measures itself. Measured in both
   // layouts, not just the full-bleed one: the tile layer needs to know how many
   // screen pixels a metre is getting before it can pick a zoom level, and that
   // is a question about the element, not about the aspect ratio.
@@ -646,7 +738,7 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
     if (onAspect) onAspect(ar);
   }, [ar, onAspect]);
 
-  // Half the visible span on each axis, in map units — the same split as the
+  // Half the visible span on each axis, in map units. The same split as the
   // pan clamp, since they have to agree about what is on screen. halfV is the
   // viewBox's own half-span; the visible pair is what covering the box leaves.
   // Everything on screen that should keep a constant size gets multiplied by k
@@ -666,7 +758,7 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
   const ry = yOf(r.roverN);
 
   // The aim handle sits at a constant distance on screen, not on the ground, so
-  // it stays reachable at every zoom level — measured against the tighter of the
+  // it stays reachable at every zoom level. Measured against the tighter of the
   // two visible spans, or on a window that is much wider than it is tall the
   // handle is thrown off the top or bottom edge and cannot be grabbed at all.
   const aimR = unitToM(Math.min(halfW, halfH) * 0.34);
@@ -724,10 +816,37 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
       return {...clampView(v.cx + (ux - v.cx) * f, v.cy + (uy - v.cy) * f, nz), layer: v.layer};
     });
 
+  // --- pinch
+  //
+  // Two fingers is a zoom, and it has to pre-empt whatever the first finger had
+  // hold of: a pinch that started life as a drag on the rover handle would
+  // otherwise fling the rover across the map while the view scaled under it.
+  const pinch = useRef(null);
+  const pinchState = () => {
+    const pts = [...touches.current.values()];
+    if (pts.length < 2) return null;
+    const [a, b] = pts;
+    return {
+      dist: Math.hypot(a.x - b.x, a.y - b.y),
+      mx: (a.x + b.x) / 2,
+      my: (a.y + b.y) / 2,
+    };
+  };
+
   function onDown(ev) {
+    if (ev.pointerType !== 'mouse') {
+      touches.current.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+      if (touches.current.size === 2) {
+        drag.current = null;
+        setGrab('pan');
+        pinch.current = {...pinchState(), z0: view.z, cx0: view.cx, cy0: view.cy};
+        ev.currentTarget.setPointerCapture(ev.pointerId);
+        return;
+      }
+    }
     // Right and middle buttons belong to the browser. A fresh press always
     // replaces whatever was in flight rather than being refused: if a drag ever
-    // did latch on — a swallowed pointerup, a cancelled gesture — refusing here
+    // did latch on. A swallowed pointerup, a cancelled gesture. Refusing here
     // would leave the map dead for the rest of the session, which is the worst
     // failure this thing has.
     if (ev.button !== 0) return;
@@ -751,6 +870,31 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
   }
 
   function onMove(ev) {
+    if (touches.current.has(ev.pointerId)) {
+      touches.current.set(ev.pointerId, {x: ev.clientX, y: ev.clientY});
+    }
+    if (pinch.current) {
+      const now = pinchState();
+      if (!now || now.dist < 1) return;
+      const rect = ev.currentTarget.getBoundingClientRect();
+      const start = pinch.current;
+      const nz = clamp((start.z0 * now.dist) / Math.max(start.dist, 1), 1, MAX_Z);
+      // Anchor on the midpoint between the fingers, measured against the view
+      // the pinch STARTED from. Reading the live view here would compound the
+      // scale every frame and run away.
+      const scale0 = cover
+        ? Math.max(rect.width / (2 * halfV), rect.height / (2 * halfV))
+        : rect.width / (2 * halfV);
+      const s0 = (scale0 * start.z0) / view.z;
+      const ux = start.cx0 + (start.mx - rect.left - rect.width / 2) / s0;
+      const uy = start.cy0 + (start.my - rect.top - rect.height / 2) / s0;
+      const f = 1 - start.z0 / nz;
+      setView((v) => ({
+        ...clampView(start.cx0 + (ux - start.cx0) * f, start.cy0 + (uy - start.cy0) * f, nz),
+        layer: v.layer,
+      }));
+      return;
+    }
     const d = drag.current;
     if (!d || d.id !== ev.pointerId) return;
     if (d.mode === 'pan') {
@@ -779,17 +923,59 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
   }
 
   // Also wired to lostpointercapture, because a capture torn away by anything
-  // other than a clean release — the browser cancelling the gesture, a
-  // re-render replacing the node — would otherwise leave a drag latched on with
+  // other than a clean release. The browser cancelling the gesture, a
+  // re-render replacing the node. Would otherwise leave a drag latched on with
   // no button held, and the next press would go to the ghost instead of the
   // handle under the cursor.
   function onUp(ev) {
+    touches.current.delete(ev.pointerId);
+    // Lifting one finger of a pinch ends the pinch rather than handing the
+    // remaining finger a drag it never asked for.
+    if (pinch.current && touches.current.size < 2) {
+      pinch.current = null;
+      setGrab(null);
+      if (ev.currentTarget.hasPointerCapture?.(ev.pointerId)) {
+        ev.currentTarget.releasePointerCapture(ev.pointerId);
+      }
+      return;
+    }
     if (drag.current && drag.current.id !== ev.pointerId) return;
     drag.current = null;
     setGrab(null);
     if (ev.currentTarget.hasPointerCapture?.(ev.pointerId)) {
       ev.currentTarget.releasePointerCapture(ev.pointerId);
     }
+  }
+
+  // --- the handles from a keyboard
+  //
+  // The three markers were drag-only, which meant the whole siting exercise,
+  // the part of this page that matters most, was unreachable without a
+  // pointer. Arrow keys nudge, shift takes bigger steps.
+  function handleKey(which) {
+    return (ev) => {
+      const step = (ev.shiftKey ? 5 : 1) * (which === 'aim' ? 5 : 25);
+      const d = {ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0]}[ev.key];
+      if (!d) return;
+      ev.preventDefault();
+      const edge = SPAN_M / 2 - 100;
+      if (which === 'base') {
+        onChange({
+          baseE: Math.round(clamp(p.baseE + d[0] * step, -edge, edge)),
+          baseN: Math.round(clamp(p.baseN + d[1] * step, -edge, edge)),
+        });
+      } else if (which === 'aim') {
+        // Left and right swing the sector; up and down are meaningless here, so
+        // they are left to the browser rather than silently doing nothing.
+        if (d[0] === 0) return;
+        onChange({aim: Math.round(((p.aim + d[0] * step) % 360 + 360) % 360)});
+      } else {
+        // The rover moves in the frame you can see: left and right swing its
+        // bearing, up and down push it out and pull it in.
+        if (d[0] !== 0) onChange({heading: Math.round(((p.heading + d[0] * 5) % 360 + 360) % 360)});
+        else onChange({distance: Math.round(clamp(p.distance + d[1] * step, 50, 2500) / 25) * 25});
+      }
+    };
   }
 
   function onDoubleClick(ev) {
@@ -902,6 +1088,17 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
           </g>
         )}
 
+        {/* Where the rover can work, under everything that says where it is.
+            Semi-transparent so the ground it is describing stays visible,
+            the whole point is to read the shape against the terrain. */}
+        {coverage && (
+          <g pointerEvents="none">
+            {coveragePaths(coverage, coverMetric, bx, by, MAP_S / SPAN_M).map((c) => (
+              <path key={c.fill} d={c.d} fill={c.fill} fillOpacity={c.alpha} />
+            ))}
+          </g>
+        )}
+
         {rings.map((d) => (
           <circle key={d} cx={bx} cy={by} r={(d / SPAN_M) * MAP_S} fill="none"
                   stroke="#fff" strokeOpacity="0.3" strokeWidth={1.4 * k} strokeDasharray={`${5 * k} ${5 * k}`} />
@@ -923,21 +1120,30 @@ export function MapView({p, r, view, setView, onChange, cover, chrome = 1, onAsp
         <line x1={bx} y1={by} x2={ax} y2={ay} stroke="#fff" strokeOpacity="0.8"
               strokeWidth={1.5 * k} strokeDasharray={`${4 * k} ${4 * k}`} />
         {/* The three handles. Each carries a transparent disc a good deal wider
-            than the marker it draws, which does nothing for the hit test — that
-            is proximity, not geometry — but everything for the cursor, which is
+            than the marker it draws, which does nothing for the hit test. That
+            is proximity, not geometry, but everything for the cursor, which is
             how you find out they can be dragged at all. */}
-        <g className={styles.handle} transform={`translate(${ax} ${ay}) scale(${k})`}>
+        <g className={styles.handle} transform={`translate(${ax} ${ay}) scale(${k})`}
+           tabIndex={0} role="slider" aria-label="Sector aim, in degrees from north"
+           aria-valuenow={Math.round(p.aim)} aria-valuemin={0} aria-valuemax={359}
+           onKeyDown={handleKey('aim')}>
           <circle cx="0" cy="0" r="20" fill="transparent" />
           <circle cx="0" cy="0" r="11" fill="#fff" fillOpacity="0.92" stroke="#000" strokeOpacity="0.5" strokeWidth="1.5" />
           <path d="M-4,3 L0,-5 L4,3 Z" fill="#000" fillOpacity="0.72" transform={`rotate(${p.aim})`} />
         </g>
 
-        <g className={styles.handle} transform={`translate(${bx} ${by}) scale(${k})`}>
+        <g className={styles.handle} transform={`translate(${bx} ${by}) scale(${k})`}
+           tabIndex={0} role="application"
+           aria-label={`Base station, ${d0(p.baseE)} m east and ${d0(p.baseN)} m north of centre. Arrow keys move it.`}
+           onKeyDown={handleKey('base')}>
           <circle cx="0" cy="0" r="20" fill="transparent" />
           <rect x="-8" y="-8" width="16" height="16" rx="3" fill="#fff" stroke="#000" strokeOpacity="0.6" strokeWidth="2" />
           <rect x="-4" y="-4" width="8" height="8" rx="1.5" fill={health} />
         </g>
-        <g className={styles.handle} transform={`translate(${rx} ${ry}) scale(${k})`}>
+        <g className={styles.handle} transform={`translate(${rx} ${ry}) scale(${k})`}
+           tabIndex={0} role="application"
+           aria-label={`Rover, ${d0(r.D)} m out on a bearing of ${d0(p.heading)} degrees. Left and right swing the bearing, up and down change the range.`}
+           onKeyDown={handleKey('rover')}>
           <circle cx="0" cy="0" r="20" fill="transparent" />
           <circle cx="0" cy="0" r="8.5" fill="#fff" stroke="#000" strokeOpacity="0.6" strokeWidth="2" />
           <circle cx="0" cy="0" r="4" fill={health} />
@@ -1103,10 +1309,19 @@ export function RangeChart({sweep, r}) {
   const fitsX = sweep.videoRange <= maxD ? xOf(sweep.videoRange) : null;
   const dUp = line('up');
   const dDown = line('down');
+  // Equal TX power at both ends over a reciprocal channel gives the same
+  // received level each way, so the two curves land exactly on top of each
+  // other unless something asymmetric is holding one of them down, which in
+  // practice means the Part 15 ceiling.
+  const twinned = sweep.rows.every((s) => Math.abs(s.up - s.down) < 0.05);
 
   return (
     <Figure
-      note="Mbps each direction would carry if it owned the whole channel"
+      note={
+        twinned
+          ? 'Mbps each direction would carry if it owned the whole channel. Identical here, because neither end is against the Part 15 ceiling'
+          : 'Mbps each direction would carry if it owned the whole channel'
+      }
       items={[
         ['thick', VIDEO, 'rover → base (video)', 'legendVideo'],
         ['dashed', CONTROL, 'base → rover (control)', 'legendControl'],
@@ -1132,14 +1347,27 @@ export function RangeChart({sweep, r}) {
             readable where they cross each other and the gridlines. */}
         <path d={dDown} fill="none" stroke="var(--ifm-background-color)" strokeWidth="6" strokeOpacity="0.85" />
         <path d={dUp} fill="none" stroke="var(--ifm-background-color)" strokeWidth="6.5" strokeOpacity="0.85" />
-        <path d={dDown} fill="none" stroke={CONTROL} strokeWidth="3" strokeDasharray="7 4"
-              strokeLinecap="round" />
-        <path d={dUp} fill="none" stroke={VIDEO} strokeWidth="3.5" strokeLinecap="round" />
+        {/* Solid first, dashed on top. The two directions coincide exactly
+            whenever neither end is against the Part 15 ceiling, which is the
+            normal case on 2.4 GHz, where a reciprocal channel and equal TX
+            power at both ends give the same received level each way. Drawn the
+            other way round the solid line covers the dashed one completely and
+            the control curve looks like it has gone missing. */}
+        <path d={dUp} fill="none" stroke={VIDEO} strokeWidth="4" strokeLinecap="round" />
+        {/* Narrower than the green and with gaps wider than its own dashes, so
+            that where the two coincide it reads as blue stitching down the
+            middle of a green line. Both directions, visibly. Matching widths
+            and a tight dash pattern just repainted the green line blue. */}
+        <path d={dDown} fill="none" stroke={CONTROL} strokeWidth="2" strokeDasharray="5 7"
+              strokeLinecap="butt" />
 
-        <circle cx={xOf(r.D)} cy={yOf(r.down.capacity)} r="4.5" fill={CONTROL}
+        {/* Same story as the curves: green underneath, blue on top and smaller,
+            so a coincidence reads as a blue dot inside a green ring rather than
+            as one direction having vanished. */}
+        <circle cx={xOf(r.D)} cy={yOf(r.up.capacity)} r="4.8" fill={VIDEO}
                 stroke="var(--ifm-background-color)" strokeWidth="1.5" />
-        <circle cx={xOf(r.D)} cy={yOf(r.up.capacity)} r="4.5" fill={VIDEO}
-                stroke="var(--ifm-background-color)" strokeWidth="1.5" />
+        <circle cx={xOf(r.D)} cy={yOf(r.down.capacity)} r="3" fill={CONTROL}
+                stroke="var(--ifm-background-color)" strokeWidth="1.2" />
 
         <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} className={styles.axis} />
         <line x1={padL} y1={padT} x2={padL} y2={H - padB} className={styles.axis} />
@@ -1212,7 +1440,7 @@ export function DirPanel({title, sub, dir, need, tag, tone}) {
           <tr>
             <td>Airtime <Help id="dirAirtime" /></td>
             <td style={dir.air > 0.6 ? {color: dir.air > 1 ? BAD : WARN} : undefined}>
-              <b>{dir.air > 9.99 ? '—' : pct(dir.air)}</b>{' '}
+              <b>{dir.air > 9.99 ? 'far too much' : pct(dir.air)}</b>{' '}
               <span className={styles.dim}>for {need} Mbps {tag}</span>
             </td>
           </tr>
@@ -1336,6 +1564,276 @@ export function SiteCard({p, r, site}) {
   );
 }
 
+// -------------------------------------------------------------- what to fix
+//
+// Every slider on the page moves the number and none of them says by how much
+// relative to the others, so "what is actually limiting this link" stays a
+// matter of taste. This ranks the moves you could really make by what each one
+// buys, and, more usefully, says why the ones worth nothing are worth nothing.
+
+export function TornadoPanel({sens}) {
+  const span = Math.max(1, ...sens.rows.map((x) => Math.abs(x.gain)));
+  const tight = sens.tight === 'up' ? 'rover → base' : 'base → rover';
+  return (
+    <div className={styles.panel}>
+      <h5>What to fix first <small>{tight} is tight</small><Help id="tornado" /></h5>
+      <ul className={styles.levers}>
+        {sens.rows.map((row) => {
+          const dead = Math.abs(row.gain) < 0.05;
+          const slower = row.rateTo < row.rateFrom * 0.98;
+          return (
+            <li key={row.key} className={dead ? styles.leverDead : undefined}>
+              <span className={styles.leverBar} aria-hidden="true">
+                <i style={{width: `${(Math.max(row.gain, 0) / span) * 100}%`,
+                           background: row.gain > 2 ? OK : row.gain > 0.5 ? WARN : 'transparent'}} />
+              </span>
+              <span className={styles.leverLbl}>{row.label}</span>
+              <span className={styles.leverVal}>
+                {dead ? 'nothing' : `${row.gain > 0 ? '+' : ''}${d1(row.gain)} dB`}
+              </span>
+              {(row.why || slower) && (
+                <span className={styles.leverWhy}>
+                  {row.why}
+                  {row.why && slower ? ' · ' : ''}
+                  {slower && `costs ${d0(100 - (row.rateTo / row.rateFrom) * 100)}% of the rate`}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className={styles.panelFoot}>
+        Measured as change in the tighter direction's link margin. The dB of fade it can take
+        before dropping out, for one move you could actually make.
+      </p>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- both bands at once
+//
+// The NetMetal ax runs 2.4 and 5 GHz concurrently on one diplexed pair, which is
+// the entire reason for the VLAN split. Picking a band in a dropdown asks the
+// wrong question: you do not choose a band, you choose which band carries which
+// flow, and the interesting answer is when those are different bands.
+
+export function BandsPanel({multi}) {
+  if (!multi.bands.length) {
+    return (
+      <div className={styles.panel}>
+        <h5>Both bands<Help id="concurrent" /></h5>
+        <p className={styles.panelFoot}>These two radios share no band, so there is no link at all.</p>
+      </div>
+    );
+  }
+  return (
+    <div className={styles.panel}>
+      <h5>Both bands <small>concurrent</small><Help id="concurrent" /></h5>
+      <table className={styles.kv}>
+        <tbody>
+          {multi.bands.map((b) => {
+            const roles = [
+              multi.video && multi.video.id === b.id ? 'video' : null,
+              multi.control && multi.control.id === b.id ? 'control' : null,
+            ].filter(Boolean);
+            return (
+              <tr key={b.id}>
+                <td>
+                  {b.label} <small>{b.width} MHz</small>
+                  {roles.length > 0 && <b className={styles.roleTag}>{roles.join(' + ')}</b>}
+                </td>
+                <td style={{color: b.r.linkAvail < 0.9 ? (b.r.linkAvail < 0.5 ? BAD : WARN) : undefined}}>
+                  {d0(b.r.linkAvail * 100)}% · {d0(b.r.up.capacity)} Mbps
+                </td>
+              </tr>
+            );
+          })}
+          {multi.bands.length > 1 && (
+            <tr>
+              <td>Both at once, down one cable <Help id="trunk" /></td>
+              <td style={multi.trunkBound ? {color: WARN} : undefined}>
+                <b>{d0(multi.airTotal)}</b> Mbps of air into {d0(multi.trunkCap)}
+              </td>
+            </tr>
+          )}
+          <tr>
+            <td>At least one band up <Help id="bandDiversity" /></td>
+            <td>
+              <b>{d1(multi.availLo * 100)}%</b>
+              {multi.availHi - multi.availLo > 0.005 && <> to {d1(multi.availHi * 100)}%</>}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      {multi.trunkBound && (
+        <p className={styles.panelFoot}>
+          Both radios share the one Ethernet port on the radio, so at this range the wire is the
+          limit rather than the air. Move the run to the 2.5G SFP, or narrow a channel and lose
+          nothing you were using.
+        </p>
+      )}
+      <p className={styles.panelFoot}>
+        {multi.split ? (
+          <>
+            Split the flows: <b>video on {multi.video.label}</b> for the rate,{' '}
+            <b>control on {multi.control.label}</b> because it holds up better. Two links, two
+            airtime budgets, which is exactly what the VLAN split buys you.
+          </>
+        ) : (
+          <>
+            One band is carrying everything here. The range is the honest span: the low end assumes
+            both bands fade together over the same dirt, the high end assumes they are independent.
+            Believe the low end.
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------- money
+
+export function CostPanel({cost, r}) {
+  // Margin over the bottom rung is what you are really buying, so price it.
+  const perDb = cost.total > 0 && r.linkMargin > 0 ? cost.total / r.linkMargin : null;
+  return (
+    <div className={styles.panel}>
+      <h5>What it costs<Help id="cost" /></h5>
+      <table className={styles.kv}>
+        <tbody>
+          {cost.items.map((it) => (
+            <tr key={it.what}>
+              <td>{it.what} <small>{it.qty > 1 ? `${it.qty}× ` : ''}{it.name}</small></td>
+              <td>{it.each ? `$${it.total}` : <span className={styles.muted}>unpriced</span>}</td>
+            </tr>
+          ))}
+          <tr>
+            <td><b>Per side</b></td>
+            <td><b>${cost.total}</b></td>
+          </tr>
+        </tbody>
+      </table>
+      <p className={styles.panelFoot}>
+        {cost.unpriced > 0 && <>{cost.unpriced} unpriced, so this is a floor. </>}
+        {perDb !== null && <><b>${d0(perDb)}</b> per dB of link margin. </>}
+        Radios and antennas only.
+      </p>
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------- compare
+//
+// The purchasing question is comparative and everything else on this page shows
+// one configuration at a time, so answering "is the cheap panel good enough"
+// meant changing four dropdowns and trusting your memory of the old numbers.
+// Pin one build, change whatever you like, and read the difference.
+
+const CMP_ROWS = [
+  {k: 'margin', label: 'Link margin', unit: ' dB', dp: 1, pick: (s) => s.r.linkMargin},
+  {k: 'uptime', label: 'Link uptime', unit: '%', dp: 1, pick: (s) => s.r.linkAvail * 100},
+  {k: 'video', label: 'Rover → base', unit: ' Mbps', dp: 0, pick: (s) => s.r.up.capacity},
+  {k: 'ctrl', label: 'Base → rover', unit: ' Mbps', dp: 0, pick: (s) => s.r.down.capacity},
+  {k: 'range', label: 'Video range', unit: ' m', dp: 0, pick: (s) => s.sweep.videoRange},
+  {k: 'streams', label: 'Spatial streams', unit: '', dp: 0, pick: (s) => s.r.streams},
+  {k: 'lateral', label: 'Lateral at 1 km', unit: ' m', dp: 0, pick: (s) => s.lateral},
+  {k: 'work', label: 'Workable area', unit: ' km²', dp: 1,
+   pick: (s) => (s.workableKm2 ?? null) === null ? null : s.workableKm2},
+  // Lower is better here, and the arrow has to know that or a cheaper build
+  // reads as a regression.
+  {k: 'cost', label: 'Cost per side', unit: '', dp: 0, prefix: '$', lowerBetter: true, pick: (s) => s.cost},
+];
+
+export function ComparePanel({a, b, onClear, onSwap}) {
+  return (
+    <div className={styles.panel}>
+      <h5>
+        A / B<Help id="compare" />
+        <small>
+          <button type="button" className={styles.linkBtn} onClick={onSwap}>swap</button>
+          {' · '}
+          <button type="button" className={styles.linkBtn} onClick={onClear}>clear</button>
+        </small>
+      </h5>
+      <table className={styles.cmp}>
+        <thead>
+          <tr>
+            <th />
+            <th title={a.name}>A</th>
+            <th title={b.name}>B</th>
+            <th>Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CMP_ROWS.map((row) => {
+            const va = row.pick(a);
+            const vb = row.pick(b);
+            // `== null` on purpose: it catches undefined as well as null. A row
+            // whose field has been renamed out from under it should go missing,
+            // not call toFixed on undefined and take the whole page down,
+            // which is exactly what a top-level linkMargin that only ever
+            // existed per-direction did the first time this shipped.
+            if (va == null || vb == null || !Number.isFinite(va) || !Number.isFinite(vb)) {
+              return null;
+            }
+            const d = vb - va;
+            const better = row.lowerBetter ? d < 0 : d > 0;
+            const flat = Math.abs(d) < Math.pow(10, -row.dp) / 2;
+            return (
+              <tr key={row.k}>
+                <td>{row.label}</td>
+                <td>{row.prefix || ''}{va.toFixed(row.dp)}{row.unit}</td>
+                <td>{row.prefix || ''}{vb.toFixed(row.dp)}{row.unit}</td>
+                <td style={{color: flat ? undefined : better ? OK : BAD}}>
+                  {flat ? 'same' : `${d > 0 ? '+' : ''}${d.toFixed(row.dp)}`}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className={styles.panelFoot}>
+        <b>A</b> is what you pinned: {a.name}. <b>B</b> is the bench as it stands now.
+      </p>
+    </div>
+  );
+}
+
+// The key to the coverage wash. Rendered in HTML rather than in the SVG so it
+// does not scale with the map.
+export function CoverageLegend({metric, workableKm2}) {
+  // Square kilometres rather than a share of the sweep: the sweep's own size is
+  // set by where the heightmap ends, so a percentage of it compares two builds
+  // against a denominator neither of them chose.
+  const area =
+    workableKm2 === undefined ? null : (
+      <b title="Ground where video and control both fit, and the link holds 90% of the drive">
+        {workableKm2 >= 10 ? d0(workableKm2) : d1(workableKm2)} km² workable
+      </b>
+    );
+  if (metric === 'video') {
+    return (
+      <span className={styles.coverKey}>
+        <i style={{background: COVER_LEGEND[COVER_LEGEND.length - 1].fill}} />
+        <span>video fits · elsewhere it does not</span>
+        {area}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.coverKey}>
+      {/* The unpainted bucket is not in the key: it has no swatch on the map
+          either, and a colour chip for "nothing is drawn here" reads as a
+          colour you should be looking for. */}
+      {COVER_LEGEND.filter((s) => s.alpha > 0).map((s) => (
+        <i key={s.label} style={{background: s.fill}} title={s.label} />
+      ))}
+      <span>{metric === 'rate' ? 'slow → fast' : '50% → always up'}</span>
+      {area}
+    </span>
+  );
+}
+
 export function InfoPanel({gear}) {
   return (
     <div className={styles.info}>
@@ -1365,21 +1863,21 @@ export function InfoPanel({gear}) {
       <h5>Putting it on real ground</h5>
       <p>
         The <b>Terrain</b> switch replaces the flat-desert-and-one-ridge world with a real
-        heightmap: a 6 km square around either the Mars Desert Research Station or the Rolla test
-        site, baked from USGS 3DEP via the AWS Terrain Tiles open dataset and committed to the repo
+        heightmap: a 6 km square around the Mars Desert Research Station, the Rolla test site or
+        Tucumcari Mountain, baked from USGS 3DEP via the AWS Terrain Tiles open dataset and committed to the repo
         so the page never depends on a live elevation API. Every value was spot-checked against the
         USGS <code>ned10m</code> service before it was written.
       </p>
       <p>
         It arrives in two resolutions, because rendering on a server and cutting an honest path
         profile want different things. A 30 m grid is inlined in the page, so the map draws
-        immediately and works with no network at all; a 11.7 m one — 3DEP's own sampling, and the
-        finest that is real rather than interpolated — is a plain file the browser fetches once and
-        caches, and the model re-runs against it the moment it lands. The path profile follows
+        immediately and works with no network at all. The 11.7 m one, which is 3DEP's own
+        sampling and the finest that is real rather than interpolated, is a plain file the browser
+        fetches once and caches, and the model re-runs against it the moment it lands. The path profile follows
         whichever grid is loaded rather than a fixed step, so the finer data actually reaches the
         diffraction and Fresnel numbers instead of being resampled away. The satellite view does
         the same thing: a baked 2.9 m image underneath as the floor, live USGS National Map tiles
-        laid over it at whatever level matches your zoom, down to 1.9 m — which is where USGS stops
+        laid over it at whatever level matches your zoom, down to 1.9 m, which is where USGS stops
         and everything past it would be invented detail.
       </p>
       <p>
@@ -1388,7 +1886,7 @@ export function InfoPanel({gear}) {
         slider: it is the angle between where you aimed the antenna and where the rover actually
         is. The path profile is cut straight out of the heightmap with the 4/3 effective-earth
         bulge folded in, and multiple obstructions are scored with the <b>Deygout</b> construction
-        — dominant edge first, then one subsidiary edge either side. Deygout over-predicts when
+       . Dominant edge first, then one subsidiary edge either side. Deygout over-predicts when
         several edges are of comparable height, which is why it stops at three rather than
         recursing.
       </p>
@@ -1401,7 +1899,7 @@ export function InfoPanel({gear}) {
         to cancel the direct one. Rolla's dissected Ozark terrain kills the reflection almost
         entirely and leaves you fighting diffraction; the flats around MDRS hand it right back.
         The caveat is that this uses whole-path RMS, which overstates roughness on terrain that is
-        rolling but locally smooth — though by then diffraction dominates anyway.
+        rolling but locally smooth, though by then diffraction dominates anyway.
       </p>
 
       <h5>Antennas, and what the band switch does to them</h5>
@@ -1414,11 +1912,11 @@ export function InfoPanel({gear}) {
         the beamwidth can actually produce.
       </p>
       <p>
-        The sliders describe the antenna <b>at the band it was measured on</b> — 5.8 GHz unless the
+        The sliders describe the antenna <b>at the band it was measured on</b>, which is 5.8 GHz unless the
         part in the slot says otherwise. An aperture keeps its physical size, not its beamwidth, so
         switching to 2.4 GHz stretches every beamwidth by the wavelength ratio of 2.38. A panel has
         two dimensions of aperture and gives up <code>20log₁₀(2.38) ≈ 7.5 dB</code>; a vertical
-        omni has one and gives up <code>10log₁₀(2.38) ≈ 3.8 dB</code>. That is not a fudge, it is
+        omni has one and gives up <code>10log₁₀(2.38) ≈ 3.8 dB</code>. That is not a fudge. It is
         why the rover omni in the bill of materials is spec'd 6.7 dBi at 5 GHz and 3.6 at 2.4, and
         why an 18 dBi panel with a 20°×20° beam becomes a <b>10.5 dBi</b> panel with a 48°×48° beam
         when you change bands. The upshot: 2.4 GHz buys you 7.5 dB of free-space loss and then
@@ -1427,7 +1925,7 @@ export function InfoPanel({gear}) {
       </p>
       <p>
         That loss is taken off the gain the part <i>claims</i>, not off the gain its beamwidths
-        allow — which matters more than it sounds. The gap between the two is the antenna's own
+        allow, which matters more than it sounds. The gap between the two is the antenna's own
         efficiency, and efficiency is a property of the metal: a panel sitting 2 dB under its
         directivity at 5.8 GHz is still 2 dB under it at 2.4. Charging the band change against the
         ceiling instead would quietly hand that gap back as free gain, and hand back the most to
@@ -1435,7 +1933,7 @@ export function InfoPanel({gear}) {
       </p>
       <p>
         <b>Two chains is not two streams.</b> A 2×2 radio needs two antenna paths that see
-        genuinely different channels, and on a clean line of sight that means two polarizations —
+        genuinely different channels, and on a clean line of sight that means two polarizations:
         there is no multipath to tell co-polar elements apart. One connector is one stream. Two
         connectors of the same polarization, which is what a pair of vertical omnis on a rover mast
         is, is also one stream: the channel matrix is rank one and the second stream has nowhere to
@@ -1444,7 +1942,7 @@ export function InfoPanel({gear}) {
       </p>
       <p>
         A <b>yagi</b> is the exception worth knowing. It is not an aperture but an end-fire array,
-        and its gain follows boom length in wavelengths rather than area in wavelengths squared —
+        and its gain follows boom length in wavelengths rather than area in wavelengths squared,
         so off its own band it gives up only <code>10log₁₀</code> of the ratio where a panel gives
         up 20. A beam that still has to satisfy <code>D ≈ 41253/(H × V)</code> can therefore only
         broaden by the <i>square root</i> of the ratio, and the lab stretches it by exactly that.
@@ -1457,7 +1955,7 @@ export function InfoPanel({gear}) {
         instead of stopping at it, which is why the obstruction row collapses when you switch to
         it. What you pay is spectrum: 902–928 MHz is 26 MHz wide in total, so 40 MHz is not a
         channel that exists and the rate ceiling arrives long before the range does. It is also the
-        one band with no point-to-point relief — §15.247(b)(3) names 2.4 and 5.8 and stops there —
+        one band with no point-to-point relief. §15.247(b)(3) names 2.4 and 5.8 and stops there,
         so 900 MHz is pinned at 36 dBm EIRP however you deploy it, and a bigger yagi buys pattern
         and reach but never power.
       </p>
@@ -1472,8 +1970,8 @@ export function InfoPanel({gear}) {
             will tune, and the <b>Ethernet port</b> behind it. That last one is not RF and is
             easily the most decisive spec on an M-series Rocket: 10/100 is a hard 94 Mbps whatever
             the air does, the link is held to the slower of the two ends, and no antenna on the
-            market moves it. The curve is generated from the two numbers a datasheet actually prints —
-            sensitivity at the bottom rung and at the top — by rescaling the published shape of a
+            market moves it. The curve is generated from the two numbers a datasheet actually prints,
+            sensitivity at the bottom rung and at the top, by rescaling the published shape of a
             real receiver of that generation between them, so you never have to invent the ten
             values in the middle.
           </p>
@@ -1490,7 +1988,7 @@ export function InfoPanel({gear}) {
             RF ports it has at which polarizations. Dropping one into a slot writes the sliders;
             moving a slider afterwards is drift, not an error, and the slot says <i>edited</i>
             until you either save it as a new part or pick the old one again. Ports and
-            polarization are not sliders — they are what the part <i>is</i> — so they follow the
+            polarization are not sliders. They are what the part <i>is</i>, so they follow the
             part and are what decide the stream count. The rover slot models a vertical omni whose
             toroid follows from its gain, so a sector dropped there contributes gain only.
           </p>
@@ -1509,17 +2007,17 @@ export function InfoPanel({gear}) {
       </p>
       <p>
         Sensitivity is a 10% packet error rate, not a promise. Real links fade, so the lab applies a
-        log-normal fade of {SHADOW_SIGMA} dB sigma. Crucially the fade is <i>one</i> random variable
+        log-normal fade of {SHADOW_SIGMA} dB sigma. The fade is <i>one</i> random variable
         that every rate sees at once, and when the top rung stops decoding the radio drops to the
         next one down rather than to zero. So throughput is averaged over the fade across the whole
-        ladder — <code>Σ (phy[m] − phy[m−1]) × uptime(m)</code> — instead of being pinned to a single
+        ladder, <code>Σ (phy[m] − phy[m−1]) × uptime(m)</code>, instead of being pinned to a single
         chosen rung. On a marginal link that fallback is most of the throughput.
       </p>
       <p>
         That is also why the panels separate two numbers that are easy to confuse. <b>Link uptime</b>
         is the bottom rung's availability: if MCS0 cannot be heard, nothing can, so this is the
         fraction of the drive you have a link at all. <b>Held</b> is how much of the drive the
-        <i>usual</i> rate survives — a link can hold its top rate only 80% of the time and still be
+        <i>usual</i> rate survives. A link can hold its top rate only 80% of the time and still be
         up 100% of the time, simply running a notch slower during the fades. Only the first one is
         a problem.
       </p>
@@ -1551,9 +2049,13 @@ export function InfoPanel({gear}) {
           efficiency moves with frame size and aggregation, and runs higher at low rates than high.</li>
         <li>One knife edge and one flat reflecting plane. Real desert is many soft edges and a
           reflector that is neither flat nor uniformly rough.</li>
-        <li>The rover sits at ground level. There is no terrain elevation under it, so pitching the
-          antenna toward the base only helps when the mast heights differ.</li>
-        <li>No rain, no foliage, no polarization mismatch, and no earth curvature — the last one is
+        <li>In the synthetic flat world the rover sits on level ground, so pitching its antenna
+          toward the base only helps when the two mast heights differ. On a map it stands on the
+          terrain under it like the base does, and the rise between the two is real.</li>
+        <li>Coverage is swept for a rover at the mast height you set, on a bearing straight out
+          from the base. It says where a link would exist, not which of those places the rover can
+          physically drive to.</li>
+        <li>No rain, no foliage, no polarization mismatch, and no earth curvature. The last one is
           worth under half a metre of bulge at 5 km, so it stays negligible at these ranges.</li>
         <li>The ACK-timeout penalty is a shaped guess, not a measurement. Real chipsets fail this
           more like a cliff than a ramp.</li>
@@ -1639,16 +2141,16 @@ export function verdictOf(r) {
     txt: `Video and control both fit in ${pct(r.airtime)} of the airtime, on ${d0(minMargin)} dB of link margin.`};
 }
 
-// Which direction to spend money on, and — the part that matters — whether
+// Which direction to spend money on, and. The part that matters. Whether
 // money can even help it. Gain on a capped transmitter buys you nothing.
 export function adviceOf(r) {
   const upIsWorse = r.up.linkMargin <= r.down.linkMargin;
   if (upIsWorse) {
-    return 'rover to base — base antenna gain buys margin here, receive gain being uncapped.';
+    return 'rover to base. Base antenna gain buys margin here, receive gain being uncapped.';
   }
   return r.down.capped
-    ? 'base to rover — and gain will not fix it, that transmitter is at the Part 15 ceiling. Mast, cable and channel width are the levers.'
-    : 'base to rover — not at the regulatory ceiling yet, so TX power and cable loss still buy something.';
+    ? 'base to rover, and gain will not fix it, that transmitter is at the Part 15 ceiling. Mast, cable and channel width are the levers.'
+    : 'base to rover, not at the regulatory ceiling yet, so TX power and cable loss still buy something.';
 }
 
 // The sweep stops at the edge of the chart. Saying "5.0 km" when the link never

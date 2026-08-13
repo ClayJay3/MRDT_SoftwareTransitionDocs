@@ -3,24 +3,25 @@ import shared from './signalViews.module.css';
 import styles from './SignalStudio.module.css';
 import {Overlay, SpecCheck, d1} from './signalViews';
 import {BANDS, PHY_FAMILIES, dirFromBeamwidth, omniVBeam} from './signalModel';
+import {BENCHES, benchSource, searchBenches} from '../../data/benches';
 import {
   ALL_WIDTHS,
   BAND_IDS,
+  antennaPayload,
   antennaSummary,
-  exportGear,
-  importGear,
-  newId,
   normalizeAntenna,
   normalizeRadioSpec,
+  radioPayload,
   radioSummary,
 } from './signalGear';
 
-// The gear library: define a part, save it, get it back later. Everything the
-// studio knows about hardware is either a built-in (code, so it improves when
-// the page does) or something typed in here and kept in this browser.
+// The gear library: define a part, save it, and everyone gets it back later.
+// Everything the studio knows about hardware is either a built-in (code, so it
+// improves when the page does) or something typed in here and stored on the
+// gear service, shared with everyone who can see the page.
 //
-// The editors deliberately ask for the numbers a datasheet actually prints —
-// gain and two beamwidths, TX power and two sensitivity anchors — rather than
+// The editors deliberately ask for the numbers a datasheet actually prints:
+// gain and two beamwidths, TX power and two sensitivity anchors, rather than
 // the internals the model derives from them.
 
 const clampNum = (v, lo, hi, fallback) => {
@@ -171,7 +172,7 @@ function AntennaEditor({draft, setDraft, onSave, onCancel, error}) {
           <>
             Carries <b>one spatial stream</b> on a clear path
             {clampNum(draft.chains, 1, 4, 2) > 1
-              ? ' — the second chain is a copy of the first, not a second channel.'
+              ? '. The second chain is a copy of the first, not a second channel.'
               : '.'}
           </>
         )}
@@ -196,13 +197,26 @@ function AntennaEditor({draft, setDraft, onSave, onCancel, error}) {
           </div>
           <p className={styles.derived}>
             <SpecCheck claimed={gain} implied={implied} />
-            {' · '}D ≈ 41253 / (H° × V°) is a ceiling, not a suggestion — and it is judged
+            {' · '}D ≈ 41253 / (H° × V°) is a ceiling, not a suggestion, and it is judged
             {' '}at {refLabel}, where these numbers were measured.
           </p>
         </>
       )}
 
-      <Field label="Note" hint="Price, part number, where the numbers came from — anything the next person needs.">
+      <div className={styles.formRow}>
+        <NumField
+          label="Price each" unit="$" value={draft.price} min={0} max={100000} step={1}
+          hint="0 means unpriced, and drops out of the build total instead of making it read low."
+          onChange={(v) => setDraft({...draft, price: v})}
+        />
+        <NumField
+          label="How many per side" value={draft.qty} min={1} max={8} step={1}
+          hint="Two omnis on a rover is two of this part, and the build total should say so."
+          onChange={(v) => setDraft({...draft, qty: v})}
+        />
+      </div>
+
+      <Field label="Note" hint="Part number, where the numbers came from. Anything the next person needs.">
         <textarea
           className={styles.input}
           rows={2}
@@ -266,7 +280,7 @@ function RadioEditor({draft, setDraft, onSave, onCancel, error}) {
       <div className={styles.formRow}>
         <NumField
           label="Spatial streams" value={draft.streams} min={1} max={4} step={1}
-          hint="The pair runs at the weaker end's stream count — and at the antennas', which is usually lower."
+          hint="The pair runs at the weaker end's stream count, and at the antennas', which is usually lower."
           onChange={(v) => setDraft({...draft, streams: v})}
         />
         <NumField
@@ -275,6 +289,12 @@ function RadioEditor({draft, setDraft, onSave, onCancel, error}) {
           onChange={(v) => setDraft({...draft, backoffTop: v})}
         />
       </div>
+
+      <NumField
+        label="Price each" unit="$" value={draft.price} min={0} max={100000} step={1}
+        hint="0 means unpriced. Two radios per link, one at each end."
+        onChange={(v) => setDraft({...draft, price: v})}
+      />
 
       <Field
         label="Ethernet port"
@@ -376,17 +396,20 @@ function RadioEditor({draft, setDraft, onSave, onCancel, error}) {
 
 const BLANK_ANTENNA = {
   name: '', kind: 'sector', ref: '5.8', gain: 15, hBeam: 30, vBeam: 30, feed: 0.4,
-  chains: 2, pol: 'x', note: '',
+  chains: 2, pol: 'x', price: 0, qty: 1, note: '',
 };
 const BLANK_RADIO = {
-  name: '', family: 'ax', streams: 2, backoffTop: 8, eth: 1000,
+  name: '', family: 'ax', streams: 2, backoffTop: 8, eth: 1000, price: 0,
   bands: {'5.8': {txMax: 25, widths: [20, 40], sens0: -96, sensTop: -70}},
   note: '',
 };
 
 export default function GearLibrary({
-  gear,
-  setGear,
+  lib,
+  onSaveItem,
+  onDeleteItem,
+  legacy,
+  onMigrate,
   antennas,
   radios,
   isBuiltin,
@@ -396,6 +419,12 @@ export default function GearLibrary({
   onUseRadio,
   onApplySetup,
   onSaveSetup,
+  onApplyBench,
+  onPreparePublish,
+  onBenchLink,
+  onPublish,
+  onDeleteBench,
+  bench,
   initial,
   onClose,
 }) {
@@ -405,10 +434,14 @@ export default function GearLibrary({
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [setupName, setSetupName] = useState('');
-  const [io, setIo] = useState(null); // 'export' | 'import'
-  const [pasted, setPasted] = useState('');
+  // The public catalogue: a search box over benches that ship with the site,
+  // and the draft entry for adding one of your own to it.
+  const [find, setFind] = useState('');
+  const [pub, setPub] = useState(null);
+  const [pubName, setPubName] = useState('');
+  const [pubNote, setPubNote] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const exported = useMemo(() => (io === 'export' ? exportGear(gear) : ''), [io, gear]);
 
   const startAntenna = (base) => {
     setDraftKind('antennas');
@@ -421,73 +454,43 @@ export default function GearLibrary({
     setError('');
   };
 
-  function saveAntenna() {
+  async function saveAntenna() {
     if (!draft.name.trim()) return setError('Give it a name you will recognise in a picker.');
-    const item = normalizeAntenna({...draft, name: draft.name.trim(), id: draft.id || newId('ant')});
-    const exists = gear.antennas.some((a) => a.id === item.id);
-    setGear({
-      ...gear,
-      antennas: exists ? gear.antennas.map((a) => (a.id === item.id ? item : a)) : [...gear.antennas, item],
-    });
+    setBusy(true);
+    const item = normalizeAntenna({...draft, name: draft.name.trim()});
+    const res = await onSaveItem('antennas', {...antennaPayload(item), id: draft.id});
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
     setDraft(null);
-    setStatus(`Saved “${item.name}”.`);
+    setStatus(`Saved “${item.name}” for everyone.`);
     return undefined;
   }
 
-  function saveRadio() {
+  async function saveRadio() {
     if (!draft.name.trim()) return setError('Give it a name you will recognise in a picker.');
     if (!Object.keys(draft.bands || {}).length) return setError('A radio needs at least one band.');
-    const item = normalizeRadioSpec({...draft, name: draft.name.trim(), id: draft.id || newId('radio')});
-    const exists = gear.radios.some((r) => r.id === item.id);
-    setGear({
-      ...gear,
-      radios: exists ? gear.radios.map((r) => (r.id === item.id ? item : r)) : [...gear.radios, item],
-    });
+    setBusy(true);
+    const item = normalizeRadioSpec({...draft, name: draft.name.trim()});
+    const res = await onSaveItem('radios', {...radioPayload(item), id: draft.id});
+    setBusy(false);
+    if (!res.ok) return setError(res.error);
     setDraft(null);
-    setStatus(`Saved “${item.name}”.`);
+    setStatus(`Saved “${item.name}” for everyone.`);
     return undefined;
   }
 
-  const removeAntenna = (id) =>
-    setGear({...gear, antennas: gear.antennas.filter((a) => a.id !== id)});
-  const removeRadio = (id) => setGear({...gear, radios: gear.radios.filter((r) => r.id !== id)});
-  const removeSetup = (id) => setGear({...gear, setups: gear.setups.filter((s) => s.id !== id)});
-
-  function doImport() {
-    try {
-      const {added, ...next} = importGear(pasted, gear);
-      setGear(next);
-      setStatus(
-        `Imported ${added.antennas} antenna(s), ${added.radios} radio(s), ${added.setups} setup(s).`,
-      );
-      setPasted('');
-      setIo(null);
-    } catch (e) {
-      setError(`That did not import: ${e.message}`);
-    }
-  }
-
-  function onFile(ev) {
-    const file = ev.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setPasted(String(reader.result || ''));
-    reader.readAsText(file);
-  }
-
-  function download() {
-    const blob = new Blob([exported], {type: 'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'mrdt-signal-gear.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const removePart = async (kind, id) => {
+    const res = await onDeleteItem(kind, id);
+    if (!res.ok) setError(res.error);
+    else setStatus('Removed.');
+  };
 
   const listRow = (item, kind) => {
     const stock = isBuiltin(item.id);
     const inUse = Object.values(slots).includes(item.id);
+    // The service refuses an edit or a delete on someone else's part anyway.
+    // Not offering the buttons is the difference between a rule and a trap.
+    const mine = !stock && (lib.moderator || (lib.you && item.by === lib.you));
     return (
       <li key={item.id} className={`${styles.row} ${inUse ? styles.rowOn : ''}`}>
         <div className={styles.rowMain}>
@@ -499,6 +502,12 @@ export default function GearLibrary({
           <span className={styles.rowSub}>
             {kind === 'antennas' ? antennaSummary(item) : radioSummary(item)}
           </span>
+          {!stock && (
+            <span className={styles.rowSub}>
+              saved by {item.by || 'someone'}{item.added ? ` on ${item.added}` : ''}
+              {item.edited ? `, edited ${item.edited}` : ''}
+            </span>
+          )}
           {item.note && <span className={styles.rowNote}>{item.note}</span>}
         </div>
         <div className={styles.rowBtns}>
@@ -532,7 +541,7 @@ export default function GearLibrary({
           >
             Duplicate
           </button>
-          {!stock && (
+          {mine && (
             <>
               <button
                 type="button"
@@ -544,7 +553,7 @@ export default function GearLibrary({
               <button
                 type="button"
                 className={`${styles.miniBtn} ${styles.miniDanger}`}
-                onClick={() => (kind === 'antennas' ? removeAntenna(item.id) : removeRadio(item.id))}
+                onClick={() => removePart(kind, item.id)}
               >
                 Delete
               </button>
@@ -558,14 +567,20 @@ export default function GearLibrary({
   const TABS = [
     ['antennas', `Antennas (${antennas.length})`],
     ['radios', `Radios (${radios.length})`],
-    ['setups', `Setups (${gear.setups.length})`],
+    ['published', `Benches (${lib.library.benches.length + BENCHES.length})`],
   ];
+
+  const allBenches = [
+    ...lib.library.benches,
+    ...BENCHES.map((b) => ({...b, origin: 'builtin'})),
+  ];
+  const found = searchBenches(allBenches, find);
 
   return (
     <Overlay
       wide
       title="Gear library"
-      sub="Built-in parts ship with the page. Anything you define is saved in this browser and can be exported."
+      sub="Built-in parts ship with the site. Everything you save is stored on the server and shared with everyone who opens the studio."
       onClose={onClose}
     >
       <div className={styles.libTabs}>
@@ -616,106 +631,183 @@ export default function GearLibrary({
       )}
       {tab === 'radios' && <ul className={styles.rows}>{radios.map((r) => listRow(r, 'radios'))}</ul>}
 
-      {tab === 'setups' && (
+      {tab === 'published' && (
         <>
+          <div className={styles.saveRow}>
+            <input
+              className={styles.input}
+              type="search"
+              placeholder="Search by name, gear, band, site, tag or who published it"
+              aria-label="Search published benches"
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+            />
+          </div>
+
+          {/* Publishing is a name and a button. Everything else about the bench
+              is already on screen behind this overlay. */}
           <div className={styles.saveRow}>
             <input
               className={styles.input}
               type="text"
               maxLength={60}
-              placeholder="Name this setup, e.g. MDRS ridge, 2.4 fallback"
-              value={setupName}
-              onChange={(e) => setSetupName(e.target.value)}
+              placeholder="Name it, e.g. MDRS ridge, 2.4 fallback"
+              value={pubName}
+              onChange={(e) => setPubName(e.target.value)}
             />
             <button
               type="button"
               className={styles.primaryBtn}
-              onClick={() => {
-                if (!setupName.trim()) return setError('Name it first.');
-                onSaveSetup(setupName.trim());
-                setSetupName('');
-                setStatus('Setup saved.');
+              disabled={busy || !lib.ok}
+              onClick={async () => {
+                setBusy(true);
                 setError('');
-                return undefined;
+                const res = await onPublish(pubName, pubNote);
+                setBusy(false);
+                if (res.ok) {
+                  setPubName('');
+                  setPubNote('');
+                  setStatus(`Published “${res.item.name}”.`);
+                } else {
+                  setError(res.error);
+                }
               }}
             >
-              Save current setup
+              {busy ? 'Publishing…' : 'Publish'}
             </button>
           </div>
+          <input
+            className={styles.input}
+            type="text"
+            maxLength={300}
+            placeholder="One line on what it is for and what to look at (optional)"
+            value={pubNote}
+            onChange={(e) => setPubNote(e.target.value)}
+          />
+
           <p className={styles.derived}>
-            A setup is the whole bench: both radios, both antennas, the terrain, where the base is
-            parked, where it is aimed and every slider. Recalling one puts all of it back.
+            A bench is a whole setup: both radios, both antennas, the terrain, where the base is
+            parked, where it is aimed and every slider. Publishing one shares it with everyone who
+            opens the studio. Signed in, you can remove anything you published.
           </p>
+
           {error && <p className={styles.error}>{error}</p>}
+
           <ul className={styles.rows}>
-            {gear.setups.map((s) => (
-              <li key={s.id} className={styles.row}>
+            {found.map((b) => (
+              <li key={`${b.origin}:${b.id}`} className={styles.row}>
                 <div className={styles.rowMain}>
-                  <span className={styles.rowName}>{s.name}</span>
+                  <span className={styles.rowName}>
+                    {b.name}
+                    <span className={styles.rowTag}>
+                      {b.origin === 'server' ? 'published' : 'built in'}
+                    </span>
+                  </span>
+                  {b.note && <span className={styles.rowSub}>{b.note}</span>}
                   <span className={styles.rowSub}>
-                    {s.summary} · saved {new Date(s.saved).toLocaleDateString()}
+                    {b.by}{b.added ? ` · ${b.added}` : ''}
+                    {b.tags.length ? ` · ${b.tags.join(' · ')}` : ''}
                   </span>
                 </div>
                 <div className={styles.rowBtns}>
-                  <button type="button" className={styles.miniBtn} onClick={() => onApplySetup(s)}>
-                    Recall
+                  <button type="button" className={styles.miniBtn} onClick={() => onApplyBench(b)}>
+                    Load
                   </button>
                   <button
                     type="button"
-                    className={`${styles.miniBtn} ${styles.miniDanger}`}
-                    onClick={() => removeSetup(s.id)}
+                    className={styles.miniBtn}
+                    onClick={() => {
+                      navigator.clipboard?.writeText(onBenchLink(b));
+                      setStatus(`Link to “${b.name}” copied.`);
+                    }}
                   >
-                    Delete
+                    Copy link
                   </button>
+                  {b.origin === 'server' && (
+                    <button
+                      type="button"
+                      className={`${styles.miniBtn} ${styles.miniDanger}`}
+                      onClick={async () => {
+                        const res = await onDeleteBench(b.id);
+                        if (res.ok) setStatus(`Removed “${b.name}”.`);
+                        else setError(res.error);
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </li>
             ))}
-            {!gear.setups.length && (
+            {!found.length && (
               <li className={styles.empty}>
-                Nothing saved yet. The link you have on screen right now — {params.band} GHz at
-                {' '}{params.distance} m — is one button away from being here.
+                {find
+                  ? `Nothing matches “${find}”.`
+                  : 'Nothing published yet. Build a link, name it, press Publish.'}
               </li>
             )}
           </ul>
+
+          {/* The permanent tier. A server bench is anyone's and can be removed;
+              the ones worth keeping belong in the repo, where they are reviewed
+              and versioned. */}
+          <div className={styles.ioBox}>
+            <p className={styles.libNote}>
+              Worth keeping for good? Print the entry for the bench on screen and open a pull
+              request adding it to <code>src/data/benches.js</code>. Those cannot be deleted by
+              anyone and ship with the site even when the server is down.
+            </p>
+            <button type="button" className={styles.miniBtn} onClick={() => setPub(onPreparePublish())}>
+              Print entry for a pull request
+            </button>
+            {pub && <textarea className={styles.input} rows={14} readOnly value={pub} />}
+          </div>
         </>
       )}
 
       <div className={styles.libFoot}>
-        <button type="button" className={styles.ghostBtn} onClick={() => setIo(io === 'export' ? null : 'export')}>
-          Export
-        </button>
-        <button type="button" className={styles.ghostBtn} onClick={() => setIo(io === 'import' ? null : 'import')}>
-          Import
-        </button>
         <span className={styles.libNote}>
-          Saved in this browser only — export the file to move it to another machine or into the repo.
+          {lib.loading && 'Loading the shared library…'}
+          {!lib.loading && lib.ok && (
+            <>
+              Saved to the server and shared with everyone who opens the studio
+              {lib.you ? `, signed in as ${lib.you}` : ', signed out, so saves are anonymous'}.
+              Built-in parts ship with the site.
+            </>
+          )}
+          {!lib.loading && !lib.ok && (
+            <>
+              The library server is {lib.reason}
+              {lib.cached
+                ? ', so this is the last copy this browser saw. Saving is off until it is back.'
+                : ', so this is the built-in parts only. Saving is off until it is back.'}
+            </>
+          )}
         </span>
       </div>
 
-      {io === 'export' && (
+      {/* Anyone who saved gear before the library moved to the server still has
+          it in this browser. One button, once, and then it stops asking. */}
+      {legacy && lib.ok && (
         <div className={styles.ioBox}>
-          <textarea className={styles.input} rows={6} readOnly value={exported} />
-          <button type="button" className={styles.primaryBtn} onClick={download}>
-            Download .json
+          <p className={styles.libNote}>
+            This browser still has {legacy.antennas.length} antenna(s), {legacy.radios.length}{' '}
+            radio(s) and {legacy.benches.length} saved setup(s) from before the library was shared.
+            Upload them and everyone gets them.
+          </p>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              await onMigrate();
+              setBusy(false);
+              setStatus('Uploaded your old gear.');
+            }}
+          >
+            {busy ? 'Uploading…' : 'Upload my old gear'}
           </button>
-        </div>
-      )}
-      {io === 'import' && (
-        <div className={styles.ioBox}>
-          <textarea
-            className={styles.input}
-            rows={6}
-            placeholder="Paste an exported gear file here"
-            value={pasted}
-            onChange={(e) => setPasted(e.target.value)}
-          />
-          <div className={styles.editorBtns}>
-            <input type="file" accept="application/json,.json" onChange={onFile} />
-            <button type="button" className={styles.primaryBtn} onClick={doImport} disabled={!pasted.trim()}>
-              Merge into my library
-            </button>
-          </div>
-          {error && <p className={styles.error}>{error}</p>}
         </div>
       )}
     </Overlay>

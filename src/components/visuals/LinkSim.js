@@ -57,7 +57,7 @@ function compute(bands) {
   // deliverable throughput (capacity × delivery ratio). They ride the same link
   // when that link is best at both; when they share it, the tc prio qdisc serves
   // control first. Video only collapses when the fattest usable link is itself
-  // tiny or gone (e.g. only 900 MHz left) — not just because control moved.
+  // tiny or gone (e.g. only 900 MHz left), not just because control moved.
   let babel = {
     control: 0, video: 0,
     controlLink: null, controlEtx: Infinity,
@@ -150,16 +150,16 @@ function InfoPanel() {
       <p>
         The rover exploits <b>source-specific routing</b>: the control subnets
         (<code>192.168.2/3.x</code>) and the camera subnet (<code>192.168.4.x</code>) are routed
-        from separate tables with different tuning. This sim models that intent — <b>control</b>
+        from separate tables with different tuning. This sim models that intent: <b>control</b>
         follows the <i>most reliable</i> link (lowest ETX), since drive and telemetry are tiny and
         latency-sensitive, while <b>video</b> follows the link with the <i>most deliverable
         throughput</i> (capacity × delivery ratio). So when 2.4 GHz degrades, control hops to clean
-        900 MHz while video stays on whatever fat link still moves the most bits — they don’t have to
+        900 MHz while video stays on whatever fat link still moves the most bits. They don’t have to
         share a fate. When both classes do land on the same link, the tc prio qdisc below serves
         control first.
       </p>
       <p>
-        Video only truly collapses when the fattest <i>usable</i> link is itself tiny — e.g. when
+        Video only truly collapses when the fattest <i>usable</i> link is itself tiny, for example when
         2.4 GHz and 5.8 GHz are gone and only the 6 Mbps 900 MHz lifeline is left. That isn’t a
         glitch: a 6 Mbps pipe can’t carry 40 Mbps of camera feed, so the design spends the little
         bandwidth there is on keeping the rover driving and lets the video starve.
@@ -274,7 +274,7 @@ export default function LinkSim() {
               <>
                 Control → <b>{babel.controlLink}</b> <em>(ETX {babel.controlEtx.toFixed(2)}, most reliable)</em>;
                 {' '}Video → <b>{babel.videoLink}</b> <em>({Math.round(babel.videoThru)} Mbps usable, most throughput)</em>
-                {babel.sameLink && <em> — same link, tc serves control first</em>}
+                {babel.sameLink && <em>. Same link, tc serves control first</em>}
               </>
             ) : 'no links'}
           </div>
@@ -288,7 +288,7 @@ export default function LinkSim() {
         Try the <b>“behind a hill”</b> scenario: EIGRP keeps load-balancing onto the half-dead 2.4 GHz
         link because it only sees “up,” so the joystick collapses right along with the video. Babel’s
         ETX for 2.4 GHz climbs, so it moves <i>control</i> onto clean 900 MHz while leaving <i>video</i>
-        on the still-fattest link — the joystick stays responsive and only the cameras degrade. The
+        on the still-fattest link. The joystick stays responsive and only the cameras degrade. The
         bars show delivered ÷ offered Mbps; numbers are illustrative (see <a href="#qos-guaranteeing-the-joystick">QoS</a> and “How this works”).
       </p>
     </div>

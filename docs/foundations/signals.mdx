@@ -31,7 +31,7 @@ We disabled 5.8 GHz because its Fast Ethernet port bottlenecked the bandwidth an
 
 The range issue requires a closer look. At 1 km, free space loss on 5.8 GHz is roughly 108 dB, and a mid-gain sector hitting a small omni lands around **-65 dBm** against a receiver that needs about -70 for its top useful rate. That is a handful of dB of margin at the top rate, not the twenty the free space number alone would suggest.
 
-The difference is the ground. A 3 m mast talking to an antenna 1.2 m off the dirt never gets a free space path: the reflected ray comes back nearly as strong as the direct one and phase-flipped, so the two partly cancel. Past roughly **4π·h₁·h₂/λ** — about 875 m for a 3 m mast at 5.8 GHz — that cancellation deepens and loss climbs as the fourth power of distance instead of the second. Drop the mast from 3 m to 1 m on an otherwise perfect path and you pay **9 dB** for nothing.
+The difference is the ground. A 3 m mast talking to an antenna 1.2 m off the dirt never gets a free space path: the reflected ray comes back nearly as strong as the direct one and phase-flipped, so the two partly cancel. Past roughly **4π·h₁·h₂/λ**, about 875 m for a 3 m mast at 5.8 GHz, that cancellation deepens and loss climbs as the fourth power of distance instead of the second. Drop the mast from 3 m to 1 m on an otherwise perfect path and you pay **9 dB** for nothing.
 
 That is why geometry, not gain, destroys these links. Terrain blocks the Fresnel zone, the ground bounce quietly eats the budget the free space number promised you, rover pitch pushes the base station into an antenna pattern null, and mounting elements directly to a metal chassis ruins the signal shape.
 
@@ -71,13 +71,13 @@ The **NetMetal ac²** (the predecessor) and the **mANTBox 52 15s** (an otherwise
 
 The NetMetal ax puts **both radios on the same two RP-SMA connectors** via a diplexer. The MikroTik product page does not make this obvious, but the hardware consequence is strict. **Whatever antenna you choose must cover both bands, or you forfeit an entire radio.** This disqualifies standard Ubiquiti airMAX and MikroTik mANT sectors because they are strictly 5 GHz.
 
-The system requires **two RF paths per side**, and both must be dual-band. Whether they are also dual-*polarized* is a separate question with its own consequences — see the warning below.
+The system requires **two RF paths per side**, and both must be dual-band. Whether they are also dual-*polarized* is a separate question with its own consequences. See the warning below.
 
 | Where | What | Qty | Why |
 |---|---|---|---|
 | Base | Dual-band dual-polarized panel, 2× N-female | 1 | one antenna handles two ports, both chains, and both bands |
 | Base | LMR-240 jumper, 2 ft, N-male to RP-SMA male | 2 | one per port, keep them as short as possible |
-| Rover | MikroTik HGO-antenna-OUT, RP-SMA male | 2 | 3.6 dBi at 2.4, 6.7 at 5, weatherproof, screws straight on — but both vertical, so **one spatial stream** |
+| Rover | MikroTik HGO-antenna-OUT, RP-SMA male | 2 | 3.6 dBi at 2.4, 6.7 at 5, weatherproof, screws straight on, but both vertical, so **one spatial stream** |
 | Rover | RP-SMA male to female extension pigtail, 12 in | 2 | moves the elements onto a mast and away from the metal chassis |
 
 The 900 MHz Rocket M900 keeps its yagi and its rover omnidirectional antennas. That system remains untouched.
@@ -93,12 +93,12 @@ Take the 7.5 dB off the **claimed** gain, not off what the beamwidths allow. The
 :::danger[Two RF ports is not two spatial streams]
 A 2×2 radio needs two antenna paths that see genuinely **different** channels. On a clean 1 km line of sight there is no multipath to tell two co-polarized elements apart, so the channel matrix is rank one and the second stream has nowhere to go. Polarization is the only thing that separates them.
 
-The BOM above buys **two HGO omnis** for the rover — two chains, both vertical. That is a 1×1 air link on the rover side, at half the PHY rate, no matter that both radios say 2×2 on the box. The base panel being dual-polarized does not rescue it; both ends have to be.
+The BOM above buys **two HGO omnis** for the rover: two chains, both vertical. That is a 1×1 air link on the rover side, at half the PHY rate, no matter that both radios say 2×2 on the box. The base panel being dual-polarized does not rescue it; both ends have to be.
 
-This costs less than it sounds *here* — the mission needs 8 Mbps and even a single stream clears it by an order of magnitude — but it is worth knowing you are buying it, and worth checking before anyone concludes the link is underperforming on the bench. The fixes, in order of preference:
+This costs less than it sounds *here*, because the mission needs 8 Mbps and even a single stream clears it by an order of magnitude. It is still worth knowing you are buying it, and worth checking before anyone concludes the link is underperforming on the bench. The fixes, in order of preference:
 
 1. A **dual-slant rover omni** (two polarizations in one radome). Usually a dB or two less gain than an HGO, and it buys the second stream back outright.
-2. Mount the **second HGO horizontally**. Ugly, mechanically awkward on a rover, and costs a polarization mismatch against a vertically-polarized base path — but free.
+2. Mount the **second HGO horizontally**. Ugly, mechanically awkward on a rover, and costs a polarization mismatch against a vertically-polarized base path, but free.
 3. **Accept 1×1** deliberately, and stop budgeting the rover uplink at 2× PHY.
 
 Confirm what the SignalPlus panel's two ports actually are before ordering. "2×2 MIMO" in a marketplace title means two connectors; it does not promise they are cross-polarized.
@@ -161,20 +161,39 @@ Rule 3.b.iii allows a third option: **steer the antenna.** A mechanized mount dr
 
 ## Play with it
 
-Drag the mast height slider on a clear path and watch the *ground bounce* line, not the Fresnel zone: 1 m of mast costs 11 dB against free space, 3 m costs 1.5, and 6 m is actually 3.6 dB **better** than free space. Nothing else on the page moves the budget that far. Then toggle the Part 15 EIRP cap to see the transmit side flatly refuse to improve with higher gain, and watch **link uptime** rather than the headline Mbps. Uptime is the bottom rung's availability — the fraction of the drive you have a link at all — and it is the number that actually fails. A link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades; that is normal and fine. Uptime falling below 100% is not. The scenario buttons represent common mistakes this page is designed to prevent.
+Drag the mast height slider on a clear path and watch the *ground bounce* line, not the Fresnel zone: 1 m of mast costs 11 dB against free space, 3 m costs 1.5, and 6 m is actually 3.6 dB **better** than free space. Nothing else on the page moves the budget that far. Then toggle the Part 15 EIRP cap to see the transmit side flatly refuse to improve with higher gain, and watch **link uptime** rather than the headline Mbps. Uptime is the bottom rung's availability, the fraction of the drive you have a link at all, and it is the number that actually fails. A link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades; that is normal and fine. Uptime falling below 100% is not. The scenario buttons represent common mistakes this page is designed to prevent.
 
-Then switch **Terrain** from *flat + ridge* to **MDRS** or **Rolla** and do the siting exercise properly. Those are real USGS heightmaps, 6 km square, over USGS orthoimagery — so you can put the tripod on a specific rise, road or wash rather than a coloured blob. Drag the base station around, swing the handle to aim the sector, drag the rover to set its bearing and range, and zoom in to 8× when you need to be precise about where something sits. Ctrl-scroll zooms here; on the full-page version the wheel does it on its own.
+Then switch **Terrain** from *flat + ridge* to **MDRS**, **Rolla** or **Tucumcari** and do the siting exercise properly. Those are real USGS heightmaps, 6 km square, over USGS orthoimagery, so you can put the tripod on a specific rise, road or wash rather than a coloured blob. Drag the base station around, swing the handle to aim the sector, drag the rover to set its bearing and range, and zoom in to 8× when you need to be precise about where something sits. Ctrl-scroll zooms here; on the full-page version the wheel does it on its own.
 
-Both layers get sharper as you go in. The elevation grid starts at 30 m so the page renders instantly, then swaps itself for 3DEP's native **11.7 m** as soon as the browser has fetched it — the path profile follows whichever is loaded, so the diffraction numbers get more honest rather than just the picture. The imagery starts at the baked 2.9 m and lays live USGS tiles over it down to **1.9 m**, which is where the National Map's coverage actually stops. The *Both* layer tints the imagery by elevation if you want the contours back. At MDRS you can find headings from the same spot that swing between a clear path and 60 dB of diffraction — which is the entire argument for [siting the tripod carefully and asking for the 20 m exception](#mounting-and-cabling), made concrete.
+Both layers get sharper as you go in. The elevation grid starts at 30 m so the page renders instantly, then swaps itself for 3DEP's native **11.7 m** as soon as the browser has fetched it. The path profile follows whichever is loaded, so the diffraction numbers get more honest rather than just the picture. The imagery starts at the baked 2.9 m and lays live USGS tiles over it down to **1.9 m**, which is where the National Map's coverage actually stops. The *Both* layer tints the imagery by elevation if you want the contours back. At MDRS you can find headings from the same spot that swing between a clear path and 60 dB of diffraction, which is the entire argument for [siting the tripod carefully and asking for the 20 m exception](#mounting-and-cabling), made concrete.
+
+Then press **Coverage**. Everything else on the page answers *does the link work where the rover is standing*; this answers *where can the rover go*, which is the question siting actually turns on and it is a shape rather than a number. Now drag the tripod 20 m onto a rise and watch the lobe change. That is the argument for the exception in one gesture, and no amount of antenna gain does the same thing to that picture.
+
+Below the panels, **What to fix first** ranks every move you could actually make by how much link margin it buys. The rows worth nothing are the ones to read: on a stock 5.8 GHz build at 1 km, *bigger base antenna*, *more base TX power* and *shorten the base jumper* are all worth exactly **0.0 dB**, and the panel says why: you are already sitting on the Part 15 EIRP ceiling and the law takes every dB you add. Switch Part 15 mode to *ignore* and they come alive again, which is the proof that it is the regulation and not the physics.
 
 <SignalLab />
 
 :::tip[There is a full-page version with a parts library]
-The same model runs at **[Signal Studio](/signal-studio)** with the whole window to itself, and it adds the thing this embed cannot: **you can define your own antennas and radios, save them, and put them back later.** Every part argued about on this page is already in it — the SignalPlus panel, the RadioLabs, the ALFA pair, the $790 L-com, both rover omnis, the NetMetal ax and the Rocket M2 and M5 we run today — so "what if we kept the Rockets" is two dropdowns rather than a rebuild.
+The same model runs at **[Signal Studio](/signal-studio)** with the whole window to itself, and it adds the thing this embed cannot: **you can define your own antennas and radios, save them, and put them back later.** Every part argued about on this page is already in it: the SignalPlus panel, the RadioLabs, the ALFA pair, the $790 L-com, both rover omnis, the NetMetal ax and the Rocket M2 and M5 we run today. So "what if we kept the Rockets" is two dropdowns rather than a rebuild.
 
-A radio there is a real object: PHY generation, spatial streams, per-band TX ceiling, channel widths, the Ethernet port behind it, and the two sensitivity numbers a datasheet actually prints. Both ends are specified separately, so a mismatched pair behaves like one — the ladder truncates to the shorter of the two, the streams drop to the weaker end, and sensitivity follows whichever radio is *listening*. Type in a quote before you buy it and see what it does to the link.
+A radio there is a real object: PHY generation, spatial streams, per-band TX ceiling, channel widths, the Ethernet port behind it, and the two sensitivity numbers a datasheet actually prints. Both ends are specified separately, so a mismatched pair behaves like one. The ladder truncates to the shorter of the two, the streams drop to the weaker end, and sensitivity follows whichever radio is *listening*. Type in a quote before you buy it and see what it does to the link.
 
 An antenna is a real object too, and that is where the two specs a listing hides live: **how many RF ports it has and what polarizations they are**. Put a pair of vertical omnis on the rover and the studio will tell you the link is running one stream, not two. Put a 10/100 Rocket on either end and it will tell you the wire is the limit rather than the air. Both are conclusions you cannot reach from a link budget alone, and both change what you should buy. Saved gear lives in your browser and exports to a JSON file you can hand to someone else.
+
+Four things there are aimed squarely at *deciding*, rather than at understanding:
+
+- **Pin as A**, then rebuild the bench however you like. The A/B panel shows both as a column of differences, so "is the $80 panel good enough against the $790 one" stops being a memory test. *Swap* flips the two so you can go back and forth.
+- **What it costs** prices the build per side at the quantity it really needs, and quotes **dollars per dB of link margin**. That number is the argument on this page reduced to one figure.
+- **Both bands** solves 2.4 and 5.8 at the same time, the way the radio actually runs them, and says which one should carry video and which should carry control. They are frequently not the same band, which is the entire point of the VLAN split.
+- **Share** copies a URL that reopens the exact bench. Paste it in Discord instead of describing your settings.
+
+The whole library is **shared**. Antennas, radios and saved benches all live on the server beside the site, so what you save your team sees, and what they save you see. You save as whoever you are signed in as, and you can edit or remove your own. Nothing is stuck in one browser.
+
+A **bench** is a whole setup: both radios, both antennas, the terrain, where the base is parked, where it is aimed and every slider. Search the list by name, gear, band, site or who saved it, load one, or copy a link straight to it.
+
+Underneath that sits a smaller permanent tier committed to `src/data/benches.js`. Every build argued about on this page is in it, including the BOM, the cheap ALFA version, the $790 sector and the Rockets as they run today. Those ship with the site rather than the server, so they are there even when it is not, and they cannot be removed from the page. Promoting a saved bench into that tier is a pull request, and the studio prints the entry for you.
+
+There is also a **CSV export** of the path profile under Terrain: ground, line of sight and the Fresnel envelope, one row per sample. Push it through SPLAT! or Radio Mobile and check this model against a reference tool before you trust it at competition.
 :::
 
 ## Mounting and cabling
@@ -186,7 +205,7 @@ It specifies *communications cable*. Do not use coax. Running 25 m of LMR-400 co
 
 The failure here is deceptive. If you run 25 m of coax on a flat bench test at 1 km, the link survives and merely drops from MCS11 to MCS6. Link uptime stays at 100%, the airtime figure only moves from 6% to 11%, and you would very likely ship it. What you actually did was spend the 18 dB of slack meant to push a signal over a ridge.
 
-Stack anything else on top and it collapses, and it collapses in the column you were not watching. Coax plus 22° of rover pitch drops both directions to the bottom rung and takes **link uptime from 100% to 53%** — the airtime is a comfortable 74%, so the throughput arithmetic still says yes while the link itself is gone half the drive. Coax plus a real 8 m ridge finishes it: 46% uptime and no video past about 500 m. Watch uptime, not Mbps.
+Stack anything else on top and it collapses, and it collapses in the column you were not watching. Coax plus 22° of rover pitch drops both directions to the bottom rung and takes **link uptime from 100% to 53%**. The airtime is a comfortable 74%, so the throughput arithmetic still says yes while the link itself is gone half the drive. Coax plus a real 8 m ridge finishes it: 46% uptime and no video past about 500 m. Watch uptime, not Mbps.
 :::
 
 Throw away the cheap RG58 coax jumpers bundled with consumer antennas. RG58 loses about 1.4 dB per meter at 5.8 GHz. Using the standard 5 m leads included with the antenna costs you 7 dB per side.
@@ -195,9 +214,9 @@ Throw away the cheap RG58 coax jumpers bundled with consumer antennas. RG58 lose
 
 **Mast height is your dominant variable, and rule 3.b.iv caps it at 3 m.** This is a hard constraint, not a design choice, and it costs you twice. The first Fresnel zone at 1 km requires 3.6 m of clearance at the midpoint on 5.8 GHz and 5.6 m on 2.4 GHz, so a 3 m mast cannot physically clear rolling ground. It also parks you right at the ground-reflection crossover: at 3 m the bounce costs 1.5 dB at 1 km, at 6 m it would *give* you 3.6 dB, and at 1 m it costs 11 dB. Every metre of mast you are allowed is worth more than any antenna on the market.
 
-Behind a real ridge the band ordering nearly flips. On a clear 1 km path 5.8 GHz beats 2.4 by about **8 dB**, because the panel gives up its full 7.5 dB of aperture gain on the lower band and only gets 7.5 dB of free-space loss back for it. Put an 8 m ridge in the path and 5.8 GHz pays **20.2 dB** of knife-edge diffraction against 2.4 GHz's **16.7 dB** — and that 3.5 dB is very nearly the whole 8 dB gap, so the two bands land within a decibel of each other on the same MCS6.
+Behind a real ridge the band ordering nearly flips. On a clear 1 km path 5.8 GHz beats 2.4 by about **8 dB**, because the panel gives up its full 7.5 dB of aperture gain on the lower band and only gets 7.5 dB of free-space loss back for it. Put an 8 m ridge in the path and 5.8 GHz pays **20.2 dB** of knife-edge diffraction against 2.4 GHz's **16.7 dB**, and that 3.5 dB is very nearly the whole 8 dB gap, so the two bands land within a decibel of each other on the same MCS6.
 
-Read that as the point rather than the punchline: a ridge is worth 3.5 dB of band advantage, and 3.5 dB does not rescue a blocked path. The diffraction advantage only gets decisive as you go much lower in frequency, which is exactly why 900 MHz remains a core part of the architecture rather than a legacy holdover — and why a relay beats a band change.
+Read that as the point rather than the punchline: a ridge is worth 3.5 dB of band advantage, and 3.5 dB does not rescue a blocked path. The diffraction advantage only gets decisive as you go much lower in frequency, which is exactly why 900 MHz remains a core part of the architecture rather than a legacy holdover, and why a relay beats a band change.
 
 Siting the base station is the best lever you have. Normally, the antenna base is restricted to within 5 m of the C2 station. At MDRS structures, a judge may allow you to place it **up to 20 m away** to clear buried cables or blocking structures. Always ask for this exception. Moving the tripod 20 m onto a natural rise outperforms any hardware upgrade you can buy.
 
@@ -217,6 +236,137 @@ These design choices are listed by impact. Every item here matters more than whi
 Both NetMetal radios come down **one Ethernet run**. This creates a problem because [Babel measures ETX per link](./babel#the-design-whichever-box-you-run-it-on). If you bridge the two radios together, Babel sees a single link and throws away the frequency diversity we just built. 
 
 Put each radio on its own VLAN, tag both on `ether1`, and terminate them as separate subinterfaces on the router.
+
+### One cable, two links
+
+The radio has a single Ethernet port, so it is fair to ask how the router picks a band. It picks by **VLAN tag**, and that is the whole job the tag is doing here. The cable is a trunk, not a bottleneck for path selection.
+
+Inside the radio, each wireless interface is an untagged member of one VLAN, and the Ethernet port is a tagged member of both:
+
+| VLAN | Radio inside the NetMetal | On the wire | On the router |
+|---|---|---|---|
+| 24 | `wifi2`, 2.4 GHz | tagged on `ether1` | `p3.24`, `10.0.0.9/29` |
+| 58 | `wifi1`, 5 GHz | tagged on `ether1` | `p3.58`, `10.0.0.17/29` |
+
+A frame the router sends tagged 58 arrives at the radio, the bridge sees VLAN 58, and it leaves via the 5 GHz interface. Tagged 24 it leaves via 2.4 GHz. Babel is not choosing a radio, it is choosing a subinterface, and the tag does the rest.
+
+Two details that decide whether this works:
+
+**The air stays untagged.** The tag only has to exist on the shared copper, because the two bands are already separate layer-2 segments once they are in the air. Both ends map tag to radio locally, so 5 GHz at the rover talks to 5 GHz at the base with plain untagged frames between them. Carrying the tag over the air instead costs you 4 bytes of MTU and buys nothing.
+
+**Both ends must map identically.** If the base has VLAN 58 on 5 GHz and the rover has 58 on 2.4 GHz, every frame still arrives and Babel still sees two neighbours. It will simply be measuring the wrong link, and nothing in the output will look wrong.
+
+### Following one frame through
+
+The tag exists on the two copper runs and nowhere else. Each radio is an **access port** on its own VLAN; each Ethernet port is a **trunk** carrying both.
+
+1. The rover RB5009 sends a packet out `p3.58`. It reaches the wire tagged VLAN 58.
+2. The NetMetal's Ethernet port receives it and the bridge looks up VLAN 58.
+3. VLAN 58 is untagged on `wifi1`, so the bridge strips the tag and sends the frame out the 5 GHz radio.
+4. It crosses the air with its source and destination MAC addresses untouched. That is the transparent part.
+5. The base NetMetal receives it on `wifi1`, whose port carries PVID 58, so the bridge puts the tag back on.
+6. VLAN 58 is tagged on the base's Ethernet port, so the frame leaves tagged and arrives at the base RB5009 on `p3.58`.
+
+Send the same packet out `p3.24` instead and every step above happens on `wifi2` and the 2.4 GHz radio. That is the whole of "sending one VLAN down 5.8 and one down 2.4".
+
+### The config, in outline
+
+On the **rover** NetMetal. The base is identical except that both radios are `ap` rather than `station-bridge`.
+
+```routeros
+# Two radios, two SSIDs, one per band. station-bridge is the mode that
+# actually carries other devices' MAC addresses across the link.
+/interface/wifi
+set [find default-name=wifi1] disabled=no channel.band=5ghz-ax \
+    configuration.mode=station-bridge configuration.ssid=MRDT-58
+set [find default-name=wifi2] disabled=no channel.band=2ghz-ax \
+    configuration.mode=station-bridge configuration.ssid=MRDT-24
+
+# One bridge. Add the ports first and switch VLAN filtering on last, or you
+# cut off the connection you are configuring over.
+/interface/bridge
+add name=br0 vlan-filtering=no
+
+/interface/bridge/port
+add bridge=br0 interface=wifi1 pvid=58     ;# access port, 5 GHz
+add bridge=br0 interface=wifi2 pvid=24     ;# access port, 2.4 GHz
+add bridge=br0 interface=ether1            ;# trunk to the router
+
+/interface/bridge/vlan
+add bridge=br0 vlan-ids=58 tagged=ether1 untagged=wifi1
+add bridge=br0 vlan-ids=24 tagged=ether1 untagged=wifi2
+
+/interface/bridge set br0 vlan-filtering=yes
+```
+
+The two `bridge/vlan` lines are the entire mechanism. `untagged=wifi1` is what puts VLAN 58 on the 5 GHz radio, and `tagged=ether1` is what lets both share the one cable.
+
+On the **RB5009** under OpenWrt, the matching half is two VLAN subinterfaces on the port facing the radio:
+
+```sh
+# /etc/config/network. Port names are the DSA ones from the port map above.
+config device
+	option type   '8021q'
+	option ifname 'p3'
+	option vid    '58'
+	option name   'p3.58'
+
+config interface 'air58'
+	option device  'p3.58'
+	option proto   'static'
+	option ipaddr  '10.0.0.17'
+	option netmask '255.255.255.248'
+```
+
+Repeat for VLAN 24 as `p3.24` on `10.0.0.9/29`, then give FRR both interfaces and Babel has two neighbours to compare. Nothing above assigns an IP address on the NetMetal itself, because it is not in the IP path at all.
+
+:::note[Check the syntax against your RouterOS version]
+MikroTik renamed the `wifiwave2` package to `wifi` in RouterOS 7.13, and the menu moved with it. On older builds the same settings live under `/interface/wifiwave2`. The bridge VLAN commands have been stable across both.
+:::
+
+### The radios stay transparent, and the control lives in the router
+
+None of this makes the NetMetal clever. It is still a **transparent layer-2 bridge**: no IP in the data path, no routing, no part in Babel. What the VLAN split buys is two transparent bridges instead of one, kept separate all the way back to the RB5009.
+
+That is where the control is. Babel is adjacent to the far RB5009 twice over, once through each bridge, and it measures and routes each one independently. The radio is not choosing anything and should not be asked to. If you find yourself configuring policy on the NetMetal, the design has drifted: the radio stays dumb, the router decides.
+
+:::danger[Plain `station` mode is not transparent, and it fails silently]
+A station in ordinary `station` mode uses 802.11 three-address frames, which cannot carry a source MAC other than the station's own. Everything behind the rover router is therefore invisible across the link. The wireless associates, the link looks up, and the traffic does not pass.
+
+The rover end must be **`station-bridge`**, which uses the four-address frame format that transparent bridging needs. `station-pseudobridge` is not a substitute: it does MAC translation and breaks anything that is not plain IP.
+
+One compatibility trap comes with it. MikroTik's documentation states that the `wifi` package's station-bridge mode "is incompatible with APs running the older `wireless` package and vice versa." Two NetMetal ax units are both on `wifi`, so they pair correctly. An ax at one end and an older `wireless` device at the other, the **NetMetal ac²** for instance, will not bridge. If anyone prices the ac² as the cheaper half of a pair, that is the reason not to.
+:::
+
+:::warning[The one port is a real ceiling at short range]
+Both radios share that single gigabit port. Each band is comfortably inside it alone, but they are sharing it rather than getting one each. At 1 km the two together come to about **820 Mbps**, which fits. Close in, on the widest legal channel each, they come to about **976 Mbps** of air against roughly 940 Mbps of usable gigabit, so the wire runs out before the radios do.
+
+That is not a problem for this mission, which needs 8 Mbps. It matters if anyone later points at the 2400 Mbit/s on the datasheet and plans around it. The escape is the **2.5G SFP** on the same unit, not a better antenna.
+:::
+
+:::note[The radio does not merge the two bands for you, on any firmware]
+It is a reasonable assumption that a dual-band radio hands the router one connection and switches bands underneath. It does not, and this is not a firmware choice you can make differently.
+
+A 2.4 GHz radio and a 5 GHz radio are two independent PHYs. Each runs its own 802.11 state machine, forms its own association and has its own MAC address, so there is no single link for anything upstream to see. RouterOS names them `wifi1` and `wifi2`; OpenWrt names them `phy0` and `phy1` and gives each its own netdev. Same hardware, same two links, different labels.
+
+The feature you are picturing does exist. It is called **Multi-Link Operation**, it arrived with Wi-Fi 7 (802.11be), and it genuinely does present several bands as one association. The NetMetal ax is Wi-Fi 6, so it does not have it.
+
+What you *can* do on this hardware is put the same SSID on both bands and let the rover associate to whichever it prefers. Do not. A station is associated to exactly one band at a time, so:
+
+* only one band carries traffic and the other sits idle instead of covering for it;
+* changing bands means dropping the association, scanning and reassociating, which costs seconds of dead air rather than the milliseconds Babel needs to move a route;
+* the decision comes from the station's roaming logic on signal strength, which cannot see packet loss, and packet loss is what actually kills these links.
+
+Bonding the two interfaces is not the answer either. Link aggregation assumes members of similar rate and latency, and striping packets across a 300 Mbps link and a 100 Mbps one mostly produces reordering.
+
+Two links is what buys the frequency diversity. Both stay up, both carry traffic, and Babel moves the route when one degrades without either interface going down.
+:::
+
+:::warning[The NetMetal stays on RouterOS, and cannot be flashed anyway]
+Babel runs on the **RB5009**, not on the radio. The NetMetal is a layer-2 bridge between an Ethernet port and the air: it carries the VLAN tags through and takes no part in routing, so it has no reason to run OpenWrt and nothing is lost by leaving it on RouterOS. [Only the RB5009 needs flashing](./babel#routeros-cant-do-this-you-have-to-flash-openwrt), because RouterOS has no Babel.
+
+That is fortunate, because the NetMetal ax cannot run OpenWrt. The SoC family (IPQ-5010) and the QCN6102 radios are both supported in principle, but the board ships with **256 MB of RAM** against OpenWrt's 512 MB floor, and the developers treat that as a hard disqualification rather than a tuning problem. Do not budget for a build that assumes otherwise.
+:::
 
 ```mermaid
 flowchart LR
@@ -306,7 +456,7 @@ These numbers are quoted directly from the URC 2026 Requirements and Guidelines.
 
 1. **Confirm the M900 supports 8 MHz channels across all three sub-bands** (3.b.v). If it cannot, that is a hardware limitation rather than a configuration bug. Find out immediately.
 2. Confirm the rover bus voltage against the NetMetal's 18 to 28 V input requirement. 
-3. Model the RF path from a 3 m mast. We already keep LiDAR databases for MDRS, Hanksville, and Tucumcari for the autonomy subteam. Push those coordinates through SPLAT!, Radio Mobile, or Cloud-RF from a few candidate C2 spots and from the 20 m exception positions.
+3. Model the RF path from a 3 m mast. We already keep LiDAR databases for MDRS, Hanksville, and Tucumcari for the autonomy subteam. MDRS and Tucumcari are both in the studio, so do the first pass there with **Coverage** on and export the profile of anything marginal. Then push the same coordinates through SPLAT!, Radio Mobile, or Cloud-RF from a few candidate C2 spots and from the 20 m exception positions, and confirm the two agree before trusting either.
 4. Buy one NetMetal ax and one antenna set. Bench test it, and then run a drive-test with active RSSI logging before purchasing the second pair.
 5. Build the relay node and weigh it against the 50 kg limit during construction.
 6. File the communications and license paperwork by **April 24**.

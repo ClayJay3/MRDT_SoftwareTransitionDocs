@@ -6,7 +6,7 @@
 // than throwing, so a typo degrades to a missing badge.
 //
 // House style: say what the number IS, then what it DOES to the link. Where a
-// figure is load-bearing on the signals page, quote it — the point of these is
+// figure is load-bearing on the signals page, quote it. The point of these is
 // to stop someone having to go and re-read the article mid-experiment.
 
 export const HELP = {
@@ -26,7 +26,7 @@ export const HELP = {
   },
   gearRoverAnt: {
     title: 'Rover antenna',
-    text: 'The element on the rover, modelled as a vertical omni whose toroid height follows from its gain. A sector dropped in this slot contributes its gain only — its azimuth pattern is not used.',
+    text: 'The element on the rover, modelled as a vertical omni whose toroid height follows from its gain. A sector dropped in this slot contributes its gain only. Its azimuth pattern is not used.',
   },
   scenario: {
     title: 'Scenarios',
@@ -41,7 +41,7 @@ export const HELP = {
   },
   baseH: {
     title: 'Base mast height',
-    text: 'Height of the base antenna above the ground it stands on — the single most powerful number on this page. It sets where the two-ray ground reflection turns over, so at 1 km on 5.8 GHz a 1 m mast costs about 11 dB against free space, 3 m costs 1.5, and 6 m is 3.6 dB better than free space. URC caps it at 3 m (rule 3.b.iv).',
+    text: 'Height of the base antenna above the ground it stands on, and the single most powerful number on this page. It sets where the two-ray ground reflection turns over, so at 1 km on 5.8 GHz a 1 m mast costs about 11 dB against free space, 3 m costs 1.5, and 6 m is 3.6 dB better than free space. URC caps it at 3 m (rule 3.b.iv).',
   },
   roverH: {
     title: 'Rover antenna height',
@@ -49,7 +49,7 @@ export const HELP = {
   },
   ridgeH: {
     title: 'Ridge height',
-    text: 'Height of a single synthetic ridge between base and rover, in the flat-desert world. 0 means a clear path. Ignored once a real heightmap is loaded — the terrain drives the profile instead.',
+    text: 'Height of a single synthetic ridge between base and rover, in the flat-desert world. 0 means a clear path. Ignored once a real heightmap is loaded, because the terrain drives the profile instead.',
   },
   ridgeD: {
     title: 'Ridge distance from base',
@@ -60,11 +60,11 @@ export const HELP = {
 
   baseTx: {
     title: 'Base TX power',
-    text: 'Conducted power at the radio’s connector, before cable loss and antenna gain. It stops at the radio’s own rating for this band, and the radio backs itself off further as the modulation gets denser — 8 dB by MCS11 on the NetMetal ax.',
+    text: 'Conducted power at the radio’s connector, before cable loss and antenna gain. It stops at the radio’s own rating for this band, and the radio backs itself off further as the modulation gets denser, reaching 8 dB by MCS11 on the NetMetal ax.',
   },
   baseGain: {
     title: 'Claimed gain',
-    text: 'Peak gain of the base antenna, as the spec sheet claims it, at the band the part was measured on — the label says which. Directivity is a hard ceiling — D ≈ 41253/(H°×V°) — so a claim the beamwidths cannot support is quietly derated to what the geometry actually allows.',
+    text: 'Peak gain of the base antenna, as the spec sheet claims it, at the band the part was measured on, and the label says which. Directivity is a hard ceiling, D ≈ 41253/(H°×V°), so a claim the beamwidths cannot support is quietly derated to what the geometry actually allows.',
   },
   baseHBeam: {
     title: 'Azimuth beamwidth',
@@ -84,14 +84,14 @@ export const HELP = {
   },
   baseCable: {
     title: 'Coax loss, base',
-    text: 'Loss in the jumper between radio and base antenna. It costs you twice — once transmitting and again receiving. 1 m of LMR-240 is about 0.4 dB at 5.8 GHz; 25 m of LMR-400 is about 18 dB, which is why the radio belongs at the antenna and the long run is Ethernet.',
+    text: 'Loss in the jumper between radio and base antenna. It costs you twice, once transmitting and again receiving. 1 m of LMR-240 is about 0.4 dB at 5.8 GHz; 25 m of LMR-400 is about 18 dB, which is why the radio belongs at the antenna and the long run is Ethernet.',
   },
 
   // -------------------------------------------------------------------- rover
 
   roverTx: {
     title: 'Rover TX power',
-    text: 'Conducted power at the rover radio. The rover is the weak transmitter in this link — roughly 26 to 30 dBm EIRP against the base station’s 36 — which is why base antenna gain, being receive gain, is what buys margin.',
+    text: 'Conducted power at the rover radio. The rover is the weak transmitter in this link, roughly 26 to 30 dBm EIRP against the base station’s 36, which is why base antenna gain, being receive gain, is what buys margin.',
   },
   roverGain: {
     title: 'Rover antenna gain',
@@ -103,22 +103,22 @@ export const HELP = {
   },
   roverCable: {
     title: 'Pigtail loss',
-    text: 'Loss in the short lead between rover radio and element. Worth a fraction of a dB if it is a proper pigtail — and worth 7 dB per side if you use the 5 m of RG58 that came in the box.',
+    text: 'Loss in the short lead between rover radio and element. Worth a fraction of a dB if it is a proper pigtail, and worth 7 dB per side if you use the 5 m of RG58 that came in the box.',
   },
 
   // -------------------------------------------------------- channel and rules
 
   band: {
     title: 'Band',
-    text: '2.4 GHz has 8 dB less free-space loss and wider, more forgiving beams; 5.8 GHz has the rate and the cleaner spectrum. The panel gives up 7.5 dB of gain moving down to 2.4, so most of that 8 dB comes straight back. 900 MHz goes further still — 16 dB of free-space loss and a wavelength that diffracts over a ridge instead of stopping at it — but the whole band is 26 MHz wide, so the rate ceiling arrives long before the range does. Only bands both radios support are offered.',
+    text: '2.4 GHz has 8 dB less free-space loss and wider, more forgiving beams; 5.8 GHz has the rate and the cleaner spectrum. The panel gives up 7.5 dB of gain moving down to 2.4, so most of that 8 dB comes straight back. 900 MHz goes further still, with 16 dB of free-space loss and a wavelength that diffracts over a ridge instead of stopping at it, but the whole band is 26 MHz wide, so the rate ceiling arrives long before the range does. Only bands both radios support are offered.',
   },
   width: {
     title: 'Channel width',
-    text: 'Doubling the channel doubles the PHY rate and raises the noise floor by 10log₁₀(BW/20) — so every halving buys about 3 dB of margin. The mission needs 8 Mbps, not 2400. Only widths both radios tune are offered.',
+    text: 'Doubling the channel doubles the PHY rate and raises the noise floor by 10log₁₀(BW/20), so every halving buys about 3 dB of margin. The mission needs 8 Mbps, not 2400. Only widths both radios tune are offered.',
   },
   reg: {
     title: 'Part 15 mode',
-    text: 'Which FCC EIRP ceiling to enforce, computed on peak gain the way it is measured. Multipoint gives back 1 dB of conducted power per 1 dB of gain past 6 dBi, pinning EIRP at 36 dBm however big the antenna. Point to point is the relaxation for a link aimed at one fixed remote, and §15.247(b)(3) grants it band by band: 5.8 GHz hands you the gain free, 2.4 GHz takes back 1 dB per 3, and 900 MHz is not on the list at all — so a 900 MHz yagi buys you pattern and reach, never EIRP. Ignore is there to show what the rules cost you, not as an operating mode.',
+    text: 'Which FCC EIRP ceiling to enforce, computed on peak gain the way it is measured. Multipoint gives back 1 dB of conducted power per 1 dB of gain past 6 dBi, pinning EIRP at 36 dBm however big the antenna. Point to point is the relaxation for a link aimed at one fixed remote, and §15.247(b)(3) grants it band by band: 5.8 GHz hands you the gain free, 2.4 GHz takes back 1 dB per 3, and 900 MHz is not on the list at all, so a 900 MHz yagi buys you pattern and reach, never EIRP. Ignore is there to show what the rules cost you, not as an operating mode.',
   },
   interference: {
     title: 'Interference vs thermal',
@@ -132,12 +132,12 @@ export const HELP = {
   // -------------------------------------------------------------- ground truth
 
   site: {
-    title: 'Terrain',
-    text: 'Flat + ridge is the synthetic world: level ground and one adjustable obstruction. MDRS and Rolla are real 6 km USGS heightmaps over USGS orthoimagery, where mast heights become heights above real ground and the path profile is cut out of the terrain. The page draws on a 30 m grid immediately, then swaps in the 11.7 m one as soon as it has fetched it. Switching sites moves the base to a known-clear starting point on that map.',
+    title: 'Ground',
+    text: 'Real 6 km USGS heightmaps over USGS orthoimagery, where mast heights become heights above real ground and the path profile is cut out of the terrain. The page draws on a 30 m grid immediately, then swaps in the 11.7 m one as soon as it has fetched it. Switching sites moves the base to a known-clear starting point on that map. The doc-page version of this lab also offers a synthetic flat world with one adjustable ridge, which is the only place the two-ray ground bounce shows up at all: real ground is too rough to reflect coherently, so on a map that term goes to nothing.',
   },
   aim: {
     title: 'Sector aim',
-    text: 'Compass bearing the base sector points at. The difference between this and the rover’s bearing is the off-boresight angle that costs you gain. Rule 3.b.iii allows steering it electronically from C2 on RSSI or relayed GNSS — just not by eye.',
+    text: 'Compass bearing the base sector points at. The difference between this and the rover’s bearing is the off-boresight angle that costs you gain. Rule 3.b.iii allows steering it electronically from C2 on RSSI or relayed GNSS, just not by eye.',
   },
   heading: {
     title: 'Rover heading',
@@ -156,7 +156,7 @@ export const HELP = {
 
   dirTx: {
     title: 'Radio TX',
-    text: 'Conducted power the radio is actually using at the rate shown — your slider, or the radio’s own ceiling for that rung once it backs off for the denser constellation, whichever is lower.',
+    text: 'Conducted power the radio is actually using at the rate shown: your slider, or the radio’s own ceiling for that rung once it backs off for the denser constellation, whichever is lower.',
   },
   dirEirp: {
     title: 'EIRP',
@@ -168,11 +168,11 @@ export const HELP = {
   },
   dirRate: {
     title: 'Usual rate',
-    text: 'The fastest rung whose threshold the median signal clears, and its PHY rate. “Held” is the fraction of the drive that rung survives the fade — a link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades.',
+    text: 'The fastest rung whose threshold the median signal clears, and its PHY rate. “Held” is the fraction of the drive that rung survives the fade. A link can hold its top rate only 60% of the time and still be up 100% of the time, simply running a notch slower through the fades.',
   },
   dirMargin: {
     title: 'Margin there',
-    text: 'How far the received signal sits above the sensitivity of the usual rate. This is margin at that rung only — when it runs out the radio steps down a rung, it does not lose the link.',
+    text: 'How far the received signal sits above the sensitivity of the usual rate. This is margin at that rung only. When it runs out the radio steps down a rung, it does not lose the link.',
   },
   dirLinkMargin: {
     title: 'Link margin',
@@ -184,7 +184,7 @@ export const HELP = {
   },
   dirCapacity: {
     title: 'Capacity',
-    text: 'What this direction would carry if it owned the whole channel — the fade-averaged expectation across the entire rate ladder, times MAC efficiency. Both directions share one half-duplex channel, so you cannot have both of these at once.',
+    text: 'What this direction would carry if it owned the whole channel: the fade-averaged expectation across the entire rate ladder, times MAC efficiency. Both directions share one half-duplex channel, so you cannot have both of these at once.',
   },
   dirAirtime: {
     title: 'Airtime',
@@ -203,7 +203,7 @@ export const HELP = {
   },
   obstruction: {
     title: 'Obstruction',
-    text: 'Knife-edge diffraction loss for terrain intruding into the path, ITU-R P.526. On a real heightmap several edges are scored with the Deygout construction — dominant edge first, then one either side.',
+    text: 'Knife-edge diffraction loss for terrain intruding into the path, ITU-R P.526. On a real heightmap several edges are scored with the Deygout construction: dominant edge first, then one either side.',
   },
   pathLoss: {
     title: 'Total path loss',
@@ -211,7 +211,7 @@ export const HELP = {
   },
   f1: {
     title: 'Fresnel radius',
-    text: '√(λ·d₁·d₂/D) at the midpoint — the radius of the first Fresnel zone, the volume around the line of sight that has to stay clear. At 1 km it is 3.6 m on 5.8 GHz and 5.6 m on 2.4, which a 3 m mast cannot clear over rolling ground.',
+    text: '√(λ·d₁·d₂/D) at the midpoint, the radius of the first Fresnel zone, the volume around the line of sight that has to stay clear. At 1 km it is 3.6 m on 5.8 GHz and 5.6 m on 2.4, which a 3 m mast cannot clear over rolling ground.',
   },
   clearance: {
     title: 'Clearance',
@@ -223,7 +223,7 @@ export const HELP = {
   },
   linkRange: {
     title: 'Link first drops at',
-    text: 'The nearest distance along this heading where even the bottom rung stops holding. “Then recovers” means it comes back further out — a fixed obstruction shadows a band of range rather than everything beyond it.',
+    text: 'The nearest distance along this heading where even the bottom rung stops holding. “Then recovers” means it comes back further out, because a fixed obstruction shadows a band of range rather than everything beyond it.',
   },
   videoRange: {
     title: 'Video first drops at',
@@ -234,7 +234,7 @@ export const HELP = {
 
   siteData: {
     title: 'Where this ground comes from',
-    text: 'A 6 km square baked from USGS 3DEP elevation, over USGS National Map orthoimagery, committed to the repo so the page never depends on a live API to render. Elevation ships at 30 m in the bundle and upgrades to 11.7 m — 3DEP\'s own resolution — from a file the browser fetches once. The imagery ships at 2.9 m and sharpens to 1.9 m from live USGS tiles as you zoom in. Every value was spot-checked against the USGS ned10m service.',
+    text: 'A 6 km square baked from USGS 3DEP elevation, over USGS National Map orthoimagery, committed to the repo so the page never depends on a live API to render. Elevation ships at 30 m in the bundle and upgrades to 11.7 m, 3DEP\'s own resolution, from a file the browser fetches once. The imagery ships at 2.9 m and sharpens to 1.9 m from live USGS tiles as you zoom in. Every value was spot-checked against the USGS ned10m service.',
   },
   groundBase: {
     title: 'Base ground',
@@ -277,7 +277,7 @@ export const HELP = {
   },
   advice: {
     title: 'The tighter direction',
-    text: 'Whichever direction has less link margin, and — the part that matters — whether money can help it. Gain on a transmitter already pinned at the Part 15 ceiling buys nothing; mast height, cable loss and channel width still do.',
+    text: 'Whichever direction has less link margin, and, the part that matters, whether money can help it. Gain on a transmitter already pinned at the Part 15 ceiling buys nothing; mast height, cable loss and channel width still do.',
   },
 
   // ----------------------------------------------------------- chart legends
@@ -292,7 +292,7 @@ export const HELP = {
   },
   legendFloor: {
     title: 'Video floor',
-    text: 'The 8 Mbps of H.265 the mission needs on the uplink. A reference level, not a cliff — control only needs 0.5 Mbps, so the downlink crossing it means much less than the uplink doing so.',
+    text: 'The 8 Mbps of H.265 the mission needs on the uplink. A reference level, not a cliff. Control only needs 0.5 Mbps, so the downlink crossing it means much less than the uplink doing so.',
   },
   legendDropout: {
     title: 'First video dropout',
@@ -308,7 +308,7 @@ export const HELP = {
   },
   legendFresnel: {
     title: 'First Fresnel zone',
-    text: 'The ellipse around the line of sight that needs to stay clear of terrain. Vertical scale on this view is heavily exaggerated — 3 m of mast over 1 km of desert is invisible at true scale.',
+    text: 'The ellipse around the line of sight that needs to stay clear of terrain. Vertical scale on this view is heavily exaggerated, because 3 m of mast over 1 km of desert is invisible at true scale.',
   },
   legendBounce: {
     title: 'Ground bounce ray',
@@ -316,7 +316,7 @@ export const HELP = {
   },
   legendTerrain: {
     title: 'Terrain',
-    text: 'The cut of ground under the path — the real heightmap profile on a map, or the synthetic ridge in the flat world.',
+    text: 'The cut of ground under the path: the real heightmap profile on a map, or the synthetic ridge in the flat world.',
   },
   legendPinch: {
     title: 'Worst clearance',
@@ -337,5 +337,36 @@ export const HELP = {
   legendToBase: {
     title: 'Direction to base',
     text: 'Where the base station sits from the rover’s point of view. How far this sits off the fat part of the pattern is what pitching on a slope costs you.',
+  },
+
+  // ------------------------------------------------------- the newer panels
+
+  tornado: {
+    title: 'What to fix first',
+    text: 'Every lever on the page, re-solved one at a time, ranked by how much link margin it buys, measured on the tighter of the two directions, because that is the one that fails. The rows worth zero are the interesting ones: a lever can be dead because you are already at the Part 15 EIRP ceiling, because it only helps the direction that already has slack, or because this particular link simply is not limited by it. Each row says which.',
+  },
+  concurrent: {
+    title: 'Both bands at once',
+    text: 'The NetMetal ax runs 2.4 and 5 GHz simultaneously on the same diplexed pair, which is the whole reason for putting each on its own VLAN, because Babel has to see two links, not one. So the real question is not which band to use but which band carries which flow. Video wants the fastest band that clears 8 Mbps; control wants the one that is still there when the fast one has gone.',
+  },
+  trunk: {
+    title: 'Both at once, down one cable',
+    text: 'The radio has one Ethernet port, so both bands share it. Each band on its own is already held to what that port will pass, but they are sharing it rather than getting one each, so what matters is the total. Close in with both bands on their widest legal channel the air is worth more than a gigabit port will carry, and the wire becomes the limit. The 2.5G SFP is the way out.',
+  },
+  bandDiversity: {
+    title: 'At least one band up',
+    text: 'How much of the drive you have some link. The two numbers are an honest range rather than a hedge: the low one assumes both bands fade together, which is close to true for shadow fading over the same dirt, and the high one assumes they are independent. Diffraction genuinely differs per band, so the truth is above the floor, but believe the floor.',
+  },
+  cost: {
+    title: 'What it costs',
+    text: 'Radios and antennas only, per side, at the quantity the build actually needs, so the rover buys two omnis, not one. Cables, mast, PoE and the router are not in here. The dollars-per-dB figure is the one that makes the argument: past a certain point you are paying a great deal of money for margin you already had.',
+  },
+  compare: {
+    title: 'A / B',
+    text: 'Pin a build and it stops moving while you take the live bench apart, so “is the cheap panel good enough” becomes a column of differences rather than a memory test. Swap puts the pinned build back on the bench and pins what was there, so you can flip between two candidates. Green is better, red is worse, and cost knows that cheaper is better.',
+  },
+  coverage: {
+    title: 'Coverage',
+    text: 'The rover swept over every bearing and range around the base, shaded by how much of the drive the link holds up. This is the siting question, where can the rover go, which is a shape rather than a number, and it is the one the tripod position actually changes. Watch it while you drag the base station 20 m onto a rise.',
   },
 };

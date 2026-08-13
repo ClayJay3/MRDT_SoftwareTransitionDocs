@@ -28,8 +28,12 @@ shim(join(src, 'components', 'visuals', 'signalModel.js'), 'signalModel.mjs', (s
   s.replace("'./terrainModel'", "'./terrainModel.mjs'"));
 shim(join(src, 'components', 'visuals', 'signalGear.js'), 'signalGear.mjs', (s) =>
   s.replace("'./signalModel'", "'./signalModel.mjs'"));
+shim(join(src, 'components', 'visuals', 'signalLink.js'), 'signalLink.mjs', (s) =>
+  s.replace("'./signalModel'", "'./signalModel.mjs'"));
+shim(join(src, 'data', 'benches.js'), 'benches.mjs');
 
 const M = await import(`file://${join(dir, 'signalModel.mjs')}`);
+const L = await import(`file://${join(dir, 'signalLink.mjs')}`);
 const T = await import(`file://${join(dir, 'terrainModel.mjs')}`);
 const G = await import(`file://${join(dir, 'signalGear.mjs')}`);
 process.on('exit', () => rmSync(dir, {recursive: true, force: true}));
@@ -39,11 +43,19 @@ const {solve, DEFAULTS, PRESETS, BANDS, WIDTHS, PHY20, SENS20, TX_BACKOFF,
        SHADOW_SIGMA, REF_MHZ, fspl, fresnel, dirFromBeamwidth, omniVBeam,
        rolloff, knifeEdge, qFunc, availabilityOf, allowedEirp,
        groundReflectionDb, clamp, sweepRange, PHY_FAMILIES, DEFAULT_RADIO,
-       normalizeRadio, sensCurve, linkLimits, radioHasBand} = M;
+       normalizeRadio, sensCurve, linkLimits, radioHasBand, feedAt,
+       solveBands, combineAvailability, sensitivity, coverageField, coverageReach,
+       coverageSignature, RULE_MAX_WIDTH} = M;
+
+const {encodeBench, decodeBench} = L;
+
+const B = await import(`file://${join(dir, 'benches.mjs')}`);
+const {BENCHES, searchBenches, benchHaystack, normalizeBench, benchSource} = B;
 
 const {BUILTIN_RADIOS, BUILTIN_ANTENNAS, normalizeAntenna, normalizeRadioSpec,
        applyBaseAntenna, applyRoverAntenna, baseMatches, roverMatches,
-       reconcileLink, antennaFromBase, exportGear, importGear} = G;
+       reconcileLink, antennaFromBase, antennaPayload, radioPayload,
+       buildCost, profileCsv} = G;
 
 // ------------------------------------------------------------------ runner
 
@@ -53,8 +65,8 @@ let group = '';
 const section = (g) => { group = g; console.log(`\n── ${g}`); };
 function check(name, ok, detail = '') {
   if (ok) { pass++; return; }
-  fails.push(`${group} :: ${name}${detail ? ` — ${detail}` : ''}`);
-  console.log(`   FAIL  ${name}${detail ? ` — ${detail}` : ''}`);
+  fails.push(`${group} :: ${name}${detail ? `. ${detail}` : ''}`);
+  console.log(`   FAIL  ${name}${detail ? `. ${detail}` : ''}`);
 }
 const near = (a, b, tol, name, d = '') =>
   check(name, Math.abs(a - b) <= tol, d || `${a} vs ${b} (tol ${tol})`);
@@ -169,7 +181,7 @@ section('2. rate ladder: fade averaging and link-level uptime');
   // Capacity must be a *continuous* function of a continuous input. An absolute
   // Mbps threshold is the wrong test: next to a two-ray null the physics is
   // genuinely steep. Instead halve the input step and confirm the output step
-  // halves with it — a real discontinuity would not shrink.
+  // halves with it. A real discontinuity would not shrink.
   const scan = (step, mk, pick, lo, hi) => {
     let worst = 0;
     let prev = null;
@@ -196,7 +208,7 @@ section('2. rate ladder: fade averaging and link-level uptime');
   const tiltMk = (t) => P({tilt: t, roverGain: 9});
   const t1 = scan(0.02, tiltMk, (r) => r.down.capacity, -45, 45);
   const t2 = scan(0.01, tiltMk, (r) => r.down.capacity, -45, 45);
-  check('capacity is continuous in rover pitch — the reported bug',
+  check('capacity is continuous in rover pitch. The reported bug',
     t2 < t1 * 0.62, `step halved: ${t1.toFixed(4)} -> ${t2.toFixed(4)} Mbps`);
 }
 
@@ -412,7 +424,7 @@ for (const s of T.SITES) {
   for (const v of g) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
   // min/max span BOTH grids, because they drive the colour ramp and the ramp
   // must not restretch when the fine grid lands. So the coarse grid has to sit
-  // inside them, not equal them — it can miss a peak the fine grid resolves.
+  // inside them, not equal them. It can miss a peak the fine grid resolves.
   check(`${s.id}: decoded range sits inside the manifest range`,
     lo >= s.min - 0.11 && hi <= s.max + 0.11, `${lo}..${hi} vs ${s.min}..${s.max}`);
   check(`${s.id}: manifest range is not wildly wider than the coarse grid`,
@@ -505,7 +517,7 @@ check('the antenna is derated correctly onto 2.4 GHz',
     const b = solve(P({band: '2.4', baseGain: 18, baseHBeam: 20, baseVBeam: 20}), 1000);
     const k = REF_MHZ / BANDS['2.4'].fMHz;
     // A panel is two dimensions of aperture, so it gives up 20log10(k) off the
-    // gain it CLAIMS — not off the gain its beamwidths allow. The difference is
+    // gain it CLAIMS, not off the gain its beamwidths allow. The difference is
     // the part's own efficiency, and efficiency does not evaporate on a band
     // change: an antenna 2 dB under its own directivity stays 2 dB under it.
     const want = 18 - 20 * Math.log10(k);
@@ -568,7 +580,7 @@ check('a link that cannot fit the mission is not marked as fitting',
   (() => {
     const r = solve(P({baseCable: 18, ridgeH: 8, ridgeD: 450}), 1000);
     // Fade averaging credits the fallback rungs, so airtime alone no longer
-    // has to exceed 100% — the link being down half the time is what kills it.
+    // has to exceed 100%. The link being down half the time is what kills it.
     return !r.fits && !r.up.up && r.up.linkAvail < 0.5;
   })());
 
@@ -852,12 +864,36 @@ check('every built-in antenna survives normalisation unchanged',
            (a.kind === 'omni' ? n.hBeam === 360 : n.hBeam === a.hBeam);
   }))());
 
-check('export then import returns the same gear, without clobbering ids',
+// The library is shared now, so a part travels to the service as a flat payload
+// rather than as an exported file. What has to hold is that the round trip
+// through that payload does not quietly change the part.
+check('a part survives the trip to the service and back unchanged',
   (() => {
-    const mine = {antennas: [normalizeAntenna({name: 'mine', gain: 14, hBeam: 40, vBeam: 40})],
-                  radios: [], setups: []};
-    const merged = importGear(exportGear(mine), mine);
-    return merged.antennas.length === 2 && merged.antennas[0].id !== merged.antennas[1].id;
+    const ant = normalizeAntenna({
+      name: 'mine', kind: 'sector', ref: '2.4', gain: 14, hBeam: 40, vBeam: 40,
+      feed: 0.6, chains: 2, pol: 'x', price: 55, qty: 2, note: 'measured',
+    });
+    const back = normalizeAntenna(antennaPayload(ant));
+    for (const k of ['name', 'kind', 'ref', 'gain', 'hBeam', 'vBeam', 'feed', 'chains', 'pol', 'price', 'qty', 'note']) {
+      if (String(back[k]) !== String(ant[k])) return false;
+    }
+    const radio = normalizeRadioSpec({
+      name: 'mine', family: 'n', streams: 1, backoffTop: 4, eth: 100, price: 90,
+      bands: {'0.9': {txMax: 28, widths: [5, 8], sens0: -96, sensTop: -75}},
+    });
+    const rback = normalizeRadioSpec(radioPayload(radio));
+    return rback.family === radio.family && rback.eth === radio.eth &&
+           rback.bands['0.9'].txMax === radio.bands['0.9'].txMax &&
+           rback.bands['0.9'].widths.join() === radio.bands['0.9'].widths.join();
+  })());
+
+check('a locally saved part carries no id the service would mistake for an edit',
+  (() => {
+    // Ids the browser minted for itself must not be sent as "edit this one",
+    // or the first save of a migrated part would try to overwrite a stranger's.
+    const ant = normalizeAntenna({name: 'local', gain: 12, hBeam: 30, vBeam: 30});
+    const radio = normalizeRadioSpec({name: 'local', bands: {'5.8': {txMax: 25}}});
+    return antennaPayload(ant).id === undefined && radioPayload(radio).id === undefined;
   })());
 
 check('sweepRange agrees with solving each distance by hand',
@@ -984,6 +1020,329 @@ check('900 MHz beats 5.8 GHz through a ridge, which is why anyone puts up with i
     const high = solve(P({...ridge, band: '5.8'}), 1000);
     return low.obstruction < high.obstruction;
   })(), 'longer wavelength diffracts over an edge more cheaply');
+
+section('11. cable loss, cost, and the profile export');
+
+check('coax loss follows the square root of frequency',
+  (() => {
+    // The 0.4 dB LMR-240 jumper that feeds a 5.8 GHz panel is a different
+    // jumper in front of a 900 MHz yagi, and getting that wrong only ever cost
+    // the low bands.
+    const at09 = feedAt(0.4, REF_MHZ, BANDS['0.9'].fMHz);
+    const at24 = feedAt(0.4, REF_MHZ, BANDS['2.4'].fMHz);
+    return Math.abs(at09 - 0.4 * Math.sqrt(915 / 5800)) < 1e-9 &&
+           at09 < at24 && at24 < 0.4 &&
+           Math.abs(feedAt(0.4, REF_MHZ, REF_MHZ) - 0.4) < 1e-12;
+  })());
+
+check('a part quoted on its own band pays exactly its quoted feed loss',
+  (() => {
+    const r = solve(P({band: '0.9', baseRefMHz: BANDS['0.9'].fMHz, roverRefMHz: BANDS['0.9'].fMHz,
+                       baseCable: 0.5, roverCable: 0.3}), 1000);
+    return Math.abs(r.baseCable - 0.5) < 1e-9 && Math.abs(r.roverCable - 0.3) < 1e-9;
+  })());
+
+check('the build total counts quantity, and unpriced parts do not read as free',
+  (() => {
+    const hgo = BUILTIN_ANTENNAS.map(normalizeAntenna).find((a) => a.id === 'mikrotik-hgo');
+    const nm = BUILTIN_RADIOS.map(normalizeRadioSpec).find((r) => r.id === 'netmetal-ax');
+    const panel = BUILTIN_ANTENNAS.map(normalizeAntenna).find((a) => a.id === 'signalplus-panel');
+    const c = buildCost({baseAnt: panel, roverAnt: hgo, baseRadio: nm, roverRadio: nm});
+    // two radios at 169, one panel at 80, two omnis at 15
+    if (c.total !== 169 * 2 + 80 + 15 * 2) return false;
+    const free = buildCost({baseAnt: {...panel, price: 0, qty: 1}, roverAnt: hgo,
+                            baseRadio: nm, roverRadio: nm});
+    return free.unpriced === 1 && free.total === c.total - 80;
+  })());
+
+check('the exported profile has one row per sample and a header',
+  (() => {
+    const p = P({site: 'mdrs', baseE: -300, baseN: -300});
+    const r = solve(p, 1000);
+    const csv = profileCsv(r, p);
+    const lines = csv.trim().split('\n');
+    const body = lines.filter((l) => !l.startsWith('#') && !l.startsWith('distance_m'));
+    if (body.length !== r.profile.length) return false;
+    // Every row must be five real numbers, except the endpoints where the
+    // Fresnel radius is legitimately zero and clearance is undefined.
+    return body.slice(1, -1).every((l) => {
+      const f = l.split(',');
+      return f.length === 5 && f.every((x) => x !== '' && Number.isFinite(+x));
+    });
+  })());
+
+check('the flat world exports nothing rather than an invented profile',
+  () => profileCsv(solve(P({site: 'off'}), 1000), P({site: 'off'})) === '');
+
+section('12. concurrent bands, levers and coverage');
+
+check('solveBands runs every band the pair shares, at the widest legal channel',
+  (() => {
+    const mb = solveBands(P(), 1000);
+    if (mb.ids.join() !== '2.4,5.8') return false;
+    // 900 MHz would be capped at 8 by rule; these two are not.
+    return mb.bands.find((b) => b.id === '5.8').width === 80 &&
+           mb.bands.find((b) => b.id === '2.4').width === 40;
+  })());
+
+check('a rule-capped band is solved at the width the rules allow',
+  (() => {
+    const m9 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m900');
+    const mb = solveBands(P({baseRadio: m9, roverRadio: m9}), 1000);
+    return mb.bands.length === 1 && mb.bands[0].width === RULE_MAX_WIDTH['0.9'];
+  })());
+
+check('band diversity is reported as a range, floor first',
+  (() => {
+    const mb = solveBands(P(), 1000);
+    if (mb.availLo > mb.availHi + 1e-12) return false;
+    // The floor is "they fade together", which is the best single band.
+    const best = Math.max(...mb.bands.map((b) => b.r.linkAvail));
+    return Math.abs(mb.availLo - best) < 1e-12;
+  })());
+
+check('combineAvailability is exact at the ends',
+  (() => {
+    const a = combineAvailability([0.9, 0.8]);
+    return Math.abs(a.lo - 0.9) < 1e-12 && Math.abs(a.hi - (1 - 0.1 * 0.2)) < 1e-12 &&
+           combineAvailability([]).hi === 0;
+  })());
+
+check('a pair with no shared band produces no bands and no crash',
+  (() => {
+    const m2 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m2');
+    const m5 = BUILTIN_RADIOS.find((r) => r.id === 'rocket-m5');
+    const mb = solveBands(P({baseRadio: m2, roverRadio: m5}), 1000);
+    return mb.bands.length === 0 && mb.video === null && mb.control === null && !mb.fits;
+  })());
+
+check('the lever ranking is sorted and every row is finite',
+  (() => {
+    const s = sensitivity(P({site: 'mdrs', baseE: -300, baseN: -300}), 1000);
+    if (!s.rows.length) return false;
+    for (let i = 1; i < s.rows.length; i++) if (s.rows[i].gain > s.rows[i - 1].gain + 1e-12) return false;
+    return s.rows.every((r) => Number.isFinite(r.gain) && Number.isFinite(r.rateTo));
+  })());
+
+check('a lever pinned at its own stop is reported as unavailable, not as zero gain',
+  (() => {
+    const s = sensitivity(P({downtilt: 0, interference: -20}), 1000);
+    const dt = s.rows.find((x) => x.key === 'downtilt');
+    return dt && !dt.available && dt.why === 'already at its limit';
+  })());
+
+check('a transmit lever on an EIRP-capped link says so',
+  (() => {
+    // Point to multipoint at 5.8 with an 18 dBi panel is pinned at 36 dBm, so
+    // base-side power and gain are worth nothing and the page has to explain why.
+    const s = sensitivity(P({reg: 'ptmp', baseGain: 18}), 1000);
+    const g = s.rows.find((x) => x.key === 'baseGain');
+    return g && Math.abs(g.gain) < 0.05 && /EIRP cap/.test(g.why || '');
+  })());
+
+check('lifting the cap makes base gain worth something again',
+  (() => {
+    const s = sensitivity(P({reg: 'off'}), 1000);
+    const g = s.rows.find((x) => x.key === 'baseGain');
+    return g && g.gain > 1;
+  })(), 'the cap is what makes it worthless, not the physics');
+
+check('narrowing the channel buys margin and costs rate',
+  (() => {
+    const s = sensitivity(P({width: 20}), 1000);
+    const w = s.rows.find((x) => x.key === 'width');
+    return w && w.gain > 2.5 && w.rateTo < w.rateFrom * 0.75;
+  })());
+
+check('coverage sweeps the full disc and every cell is a real probability',
+  (() => {
+    const p = P({site: 'mdrs', baseE: -300, baseN: -300});
+    const f = coverageField(p, coverageReach(p), 24, 12);
+    if (f.uptime.length !== 24 * 12) return false;
+    return [...f.uptime].every((v) => v >= 0 && v <= 1) &&
+           f.workableKm2 >= 0 && f.workableKm2 <= Math.PI * (coverageReach(p) / 1000) ** 2 + 1e-9 &&
+           [...f.rate].every((v) => Number.isFinite(v) && v >= 0);
+  })());
+
+check('coverage falls off with range',
+  (() => {
+    const p = P({site: 'off', ridgeH: 0});
+    const f = coverageField(p, 3000, 8, 20);
+    // Along any bearing the flat world is monotonic in distance, so the near
+    // ring must never be worse than the far one.
+    for (let b = 0; b < 8; b++) {
+      if (f.uptime[b * 20] < f.uptime[b * 20 + 19] - 1e-9) return false;
+    }
+    return true;
+  })());
+
+check('the coverage signature ignores where the rover is and nothing else',
+  (() => {
+    const a = coverageSignature(P());
+    if (coverageSignature(P({distance: 2000, heading: 200})) !== a) return false;
+    // ...and does notice the things that genuinely reshape the lobe.
+    for (const patch of [{baseE: 100}, {baseH: 6}, {aim: 90}, {band: '2.4'}, {baseGain: 24}]) {
+      if (coverageSignature(P(patch)) === a) return false;
+    }
+    return true;
+  })(), 'or dragging the rover would re-run three thousand solves');
+
+// The readout panels index straight into a solve() result, so a field they
+// expect that does not exist is not a wrong number, it is a blank page. This
+// pins the shape they read rather than trusting each of them to be careful.
+check('solve() exposes every top-level field the readouts index into',
+  (() => {
+    const want = ['linkMargin', 'linkAvail', 'streams', 'radioStreams', 'lateral',
+                  'ethCap', 'ethBound', 'D', 'fits', 'airtime', 'chainCap'];
+    for (const p of [P(), P({site: 'mdrs', baseE: -300, baseN: -300}), P({band: '2.4'})]) {
+      const r = solve(p, 1000);
+      for (const k of want) {
+        if (r[k] === undefined) return false;
+        if (typeof r[k] === 'number' && !Number.isFinite(r[k])) return false;
+      }
+      for (const dir of ['up', 'down']) {
+        for (const k of ['capacity', 'linkMargin', 'linkAvail', 'rx', 'mcs', 'rungs']) {
+          if (r[dir][k] === undefined) return false;
+        }
+      }
+    }
+    return true;
+  })(), 'a renamed field is a crashed page, not a wrong number');
+
+check('the link margin is the worse direction, the way the uptime is',
+  (() => {
+    for (const d of [200, 1000, 2400]) {
+      const r = solve(P({site: 'mdrs', baseE: -300, baseN: -300}), d);
+      if (Math.abs(r.linkMargin - Math.min(r.up.linkMargin, r.down.linkMargin)) > 1e-12) return false;
+      // ...and it agrees with the availability it implies.
+      if (Math.abs(r.linkAvail - Math.min(r.up.linkAvail, r.down.linkAvail)) > 1e-12) return false;
+    }
+    return true;
+  })());
+
+check('a shared bench survives the round trip through a URL',
+  (() => {
+    const p = P({baseH: 6.5, band: '2.4', width: 40, site: 'rolla', baseE: 125, ackSet: false});
+    const back = decodeBench(encodeBench(p, {baseAnt: 'alfa-apa-m25'}));
+    if (!back) return false;
+    if (back.slots.baseAnt !== 'alfa-apa-m25') return false;
+    // Only the differences travel, so the token stays paste-able.
+    if (Object.keys(back.p).length > 8) return false;
+    return Object.entries(back.p).every(([k, v]) => v === p[k]);
+  })());
+
+check('a corrupt or hostile link degrades to the defaults',
+  (() => {
+    for (const bad of ['', 'not-base64!!', encodeBench(P()).slice(0, 6), 'eyJ2Ijo5OSwicCI6e319']) {
+      const out = decodeBench(bad);
+      if (out && Object.keys(out.p).length) return false;
+    }
+    // A key the model does not have, and a key of the wrong type, are dropped
+    // rather than handed to solve().
+    const junk = decodeBench(
+      Buffer.from(JSON.stringify({v: 1, p: {baseH: 'tall', nonsense: 5, band: '2.4'}}))
+        .toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+    );
+    return junk && junk.p.band === '2.4' && !('baseH' in junk.p) && !('nonsense' in junk.p);
+  })());
+
+section('13. the published bench catalogue');
+
+// This file is hand-edited and arrives by pull request, so the harness is the
+// review: an entry that does not load, names gear that does not exist, or
+// solves to nonsense must fail here rather than on the page.
+
+check('every published bench has the fields the list renders',
+  () => BENCHES.every((b) =>
+    b.id && b.name && b.by && /^\d{4}-\d{2}-\d{2}$/.test(b.added) &&
+    b.note.length > 10 && Array.isArray(b.tags)));
+
+check('bench ids are unique',
+  () => new Set(BENCHES.map((b) => b.id)).size === BENCHES.length);
+
+check('every bench names gear that actually exists',
+  (() => {
+    const ants = new Set(BUILTIN_ANTENNAS.map((a) => a.id));
+    const rads = new Set(BUILTIN_RADIOS.map((r) => r.id));
+    return BENCHES.every((b) =>
+      ants.has(b.slots.baseAnt) && ants.has(b.slots.roverAnt) &&
+      rads.has(b.slots.baseRadio) && rads.has(b.slots.roverRadio));
+  })());
+
+check('every bench carries only real model parameters',
+  () => BENCHES.every((b) => Object.keys(b.params).every((k) => k in DEFAULTS)));
+
+check('every bench loads onto a link that solves cleanly',
+  (() => {
+    for (const b of BENCHES) {
+      const baseR = BUILTIN_RADIOS.find((r) => r.id === b.slots.baseRadio);
+      const roverR = BUILTIN_RADIOS.find((r) => r.id === b.slots.roverRadio);
+      const baseA = BUILTIN_ANTENNAS.find((a) => a.id === b.slots.baseAnt);
+      const roverA = BUILTIN_ANTENNAS.find((a) => a.id === b.slots.roverAnt);
+      const p = reconcileLink({
+        ...DEFAULTS,
+        baseRadio: baseR, roverRadio: roverR,
+        ...applyBaseAntenna(baseA), ...applyRoverAntenna(roverA),
+        ...b.params,
+      });
+      const r = solve(p, p.distance);
+      if (allFinite(r).length) return false;
+      // A bench in the catalogue is one someone put their name on, so it has
+      // to be a link that exists on the band it claims.
+      if (!r.bandOk) return false;
+    }
+    return true;
+  })());
+
+check('the band and width a bench asks for survive reconciliation',
+  (() => {
+    // If a bench names a band its radios cannot tune, reconcileLink silently
+    // moves it somewhere else and the entry is a lie about what it shows.
+    for (const b of BENCHES) {
+      if (!b.params.band) continue;
+      const baseR = BUILTIN_RADIOS.find((r) => r.id === b.slots.baseRadio);
+      const roverR = BUILTIN_RADIOS.find((r) => r.id === b.slots.roverRadio);
+      const p = reconcileLink({...DEFAULTS, baseRadio: baseR, roverRadio: roverR, ...b.params});
+      if (p.band !== b.params.band) return false;
+      if (b.params.width && p.width !== b.params.width) return false;
+    }
+    return true;
+  })());
+
+check('no published bench flies a channel the rules forbid',
+  () => BENCHES.every((b) => {
+    const cap = RULE_MAX_WIDTH[b.params.band];
+    return cap === undefined || !b.params.width || b.params.width <= cap;
+  }), 'a catalogue entry is a recommendation, so it has to be legal');
+
+check('search narrows on every term and matches gear as well as text',
+  (() => {
+    if (searchBenches(BENCHES, '').length !== BENCHES.length) return false;
+    if (searchBenches(BENCHES, 'zzzznothing').length !== 0) return false;
+    // Gear ids are in the haystack, so a part name finds the benches using it.
+    const rockets = searchBenches(BENCHES, 'rocket');
+    if (!rockets.length || !rockets.every((b) => benchHaystack(b).includes('rocket'))) return false;
+    // Extra terms narrow rather than widen.
+    const one = searchBenches(BENCHES, '5.8');
+    const two = searchBenches(BENCHES, '5.8 budget');
+    return two.length <= one.length;
+  })());
+
+check('a hand-edited entry with junk in it still normalizes',
+  (() => {
+    const b = normalizeBench({id: 'x', tags: 'not-an-array', slots: null, params: undefined});
+    return Array.isArray(b.tags) && b.tags.length === 0 &&
+           typeof b.slots === 'object' && typeof b.params === 'object' &&
+           b.name === 'Unnamed bench';
+  })());
+
+check('the printed entry is valid JavaScript that round-trips',
+  (() => {
+    const src = benchSource(BENCHES[0]);
+    // eslint-disable-next-line no-new-func
+    const back = new Function(`return [${src}][0];`)();
+    return back.id === BENCHES[0].id && back.slots.baseAnt === BENCHES[0].slots.baseAnt;
+  })(), 'someone is going to paste this straight into the file');
 
 // ------------------------------------------------------------------ done
 

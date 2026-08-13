@@ -1,7 +1,13 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for the MRDT Software Bible (Docusaurus).
-#   target=dev   → hot-reload dev server (default for `docker compose up`)
-#   target=prod  → static build served by nginx
+#   target=dev    → hot-reload dev server (default for `docker compose up`)
+#   target=prod   → static build served by nginx, behind Authentik
+#   target=studio → the public signal studio, its own build, no docs in it
+#
+# prod and studio are two builds of one project rather than one build served
+# twice, because the public one must not contain the bible. See the comment at
+# the top of docusaurus.studio.config.js for why that cannot be done with a
+# routing rule over a single build.
 
 # ---- shared deps layer ----
 FROM node:20-alpine AS base
@@ -46,4 +52,17 @@ RUN npm run build
 FROM nginx:alpine AS prod
 COPY --from=build /app/build /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+
+# ---- studio-build: the same project with the docs plugin off ----
+FROM base AS studio-build
+COPY . .
+RUN npm run build:studio
+
+# ---- studio: the public page, served under its own prefix ----
+# The build addresses itself under /signal-studio/, so it is copied into a
+# directory of that name and every URL in it resolves without a rewrite.
+FROM nginx:alpine AS studio
+COPY --from=studio-build /app/build-studio /usr/share/nginx/html/signal-studio
+COPY nginx.studio.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
